@@ -43,18 +43,17 @@
 #pragma once
 
 #include <StormByte/safe/cstring.hxx>
+#include <StormByte/safe/vector.hxx>
 #include <StormByte/error.hxx>
 #include <StormByte/safe/string.hxx>
 #include <StormByte/system/visibility.h>
 
 #include <chrono>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <vector>
 #ifdef WINDOWS
 #include <windows.h>
 #else
@@ -123,14 +122,15 @@ namespace StormByte::System {
 			 * @param prog Executable path or name.
 			 * @param args Argument list (not including argv[0]).
 			 */
-			Process(const std::filesystem::path& prog, const std::vector<StormByte::Safe::String>& args = {}) noexcept;
+			Process(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args = {}) noexcept;
 
 			/**
-			 * @brief Construct and start (moved).
-			 * @param prog Executable path or name (moved).
-			 * @param args Argument list (moved).
+			 * @brief Construct and start from a UTF-8 path view.
+			 * @param prog Executable path or name. Copied into Base-owned text before crossing the DLL boundary.
+			 * @param args Argument list (not including argv[0]).
 			 */
-			Process(std::filesystem::path&& prog, std::vector<StormByte::Safe::String>&& args = {}) noexcept;
+			Process(std::string_view prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args = {}) noexcept:
+				Process(StormByte::Safe::String(prog), args) {}
 
 			Process(const Process& proc) = delete;
 

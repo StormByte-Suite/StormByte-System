@@ -39,9 +39,14 @@
  */
 
 #include <StormByte/error.txx>
+#include <StormByte/safe/wstring.hxx>
 #include <StormByte/system/pipe.hxx>
 #include <StormByte/system/process.hxx>
 #include <StormByte/system/process/implementation.hxx>
+
+#include <filesystem>
+#include <string>
+#include <vector>
 
 #ifdef UNIX
 #include <cerrno>
@@ -58,10 +63,19 @@
 using namespace StormByte::System;
 
 namespace {
-	std::vector<std::string> NarrowArgs(const std::vector<StormByte::Safe::String>& args) {
+	std::filesystem::path NativePath(const StormByte::Safe::String& text) {
+#ifdef WINDOWS
+		const StormByte::Safe::WString wide(text);
+		return std::filesystem::path(static_cast<std::wstring_view>(wide));
+#else
+		return std::filesystem::path(static_cast<std::string_view>(text));
+#endif
+	}
+
+	std::vector<std::string> NarrowArgs(const StormByte::Safe::Vector<StormByte::Safe::String>& args) {
 		std::vector<std::string> out;
 		out.reserve(args.size());
-		for (const StormByte::Safe::String& arg : args)
+		for (const StormByte::Safe::String arg : args)
 			out.emplace_back(std::string(std::string_view(arg)));
 		return out;
 	}
@@ -75,7 +89,7 @@ namespace {
 	}
 }
 
-Process::Process(const std::filesystem::path& prog, const std::vector<StormByte::Safe::String>& args) noexcept:
+Process::Process(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) noexcept:
 	m_implementation(std::make_unique<ProcessImplementation>()) {
 	m_implementation->m_status = Status::RUNNING;
 #ifdef UNIX
@@ -84,29 +98,7 @@ Process::Process(const std::filesystem::path& prog, const std::vector<StormByte:
 	m_implementation->m_pstdout = std::make_shared<Pipe>();
 	m_implementation->m_pstdin = std::make_shared<Pipe>();
 	m_implementation->m_pstderr = std::make_shared<Pipe>();
-	m_implementation->m_program = std::filesystem::path(prog.native());
-	m_implementation->m_arguments = NarrowArgs(args);
-#ifdef WINDOWS
-	ZeroMemory(&m_implementation->m_siStartInfo, sizeof(STARTUPINFOW));
-	ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
-#endif
-	if (!*m_implementation->m_pstdout || !*m_implementation->m_pstdin || !*m_implementation->m_pstderr) {
-		Fail(*m_implementation, Process::Error::CreationFailed);
-		return;
-	}
-	Run();
-}
-
-Process::Process(std::filesystem::path&& prog, std::vector<StormByte::Safe::String>&& args) noexcept:
-	m_implementation(std::make_unique<ProcessImplementation>()) {
-	m_implementation->m_status = Status::RUNNING;
-#ifdef UNIX
-	m_implementation->m_pid = -1;
-#endif
-	m_implementation->m_pstdout = std::make_shared<Pipe>();
-	m_implementation->m_pstdin = std::make_shared<Pipe>();
-	m_implementation->m_pstderr = std::make_shared<Pipe>();
-	m_implementation->m_program = std::filesystem::path(prog.native());
+	m_implementation->m_program = NativePath(prog);
 	m_implementation->m_arguments = NarrowArgs(args);
 #ifdef WINDOWS
 	ZeroMemory(&m_implementation->m_siStartInfo, sizeof(STARTUPINFOW));

@@ -121,7 +121,7 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 using StormByte::System::Process;
 
-Process missing("/no/such/stormbyte-tool");
+Process missing(StormByte::Safe::String("/no/such/stormbyte-tool"));
 if (!missing) {
 	if (missing.Fault().code() == make_error_code(Process::Error::ExecutableNotFound))
 		/* spawn failed */;
@@ -245,6 +245,7 @@ A failed Windows expand returns the original text (same idea as a missing UNIX `
 - `Device` stores only the caller accessor. Kind/Access/Throughput/Window are valid only when the Device converts to `true`.
 - `Directory` / `File` / `Host` / `ThisThread` `LastError()` is `thread_local` inside this module, exposed by an exported getter. Do not put `thread_local` in a public header.
 - Public text across a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::CString`.
+- `Process` takes its executable path as UTF-8 text and arguments as `Safe::Vector<Safe::String>`; conversion to the native filesystem path happens inside System.
 - Destructor of `Process` waits if the child is still owned. Move invalidates the source.
 
 ## Testing

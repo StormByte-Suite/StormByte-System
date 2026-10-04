@@ -24,7 +24,7 @@ If you landed here from a release link and have not read the tree:
 
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.0...HEAD
 
-## [2.0.0] - 2026-10-02
+## [2.0.0] - 2026-10-04
 
 ### Added
 
@@ -46,7 +46,7 @@ If you landed here from a release link and have not read the tree:
     - Timed `Wait` sets `TimedOut` and leaves the child running. A second wait after a successful reap sets `AlreadyExited`.
     - A failed stdin write sets `BrokenPipe`.
 - **Breaking:** `Variable::Expand` returns `StormByte::Safe::String`. On Windows, a failed `ExpandEnvironmentStringsW` returns the original text (same as a missing UNIX home).
-- **Breaking:** Process constructor arguments are `std::vector<StormByte::Safe::String>`.
+- **Breaking:** Process constructors take a UTF-8 `StormByte::Safe::String` executable path and `StormByte::Safe::Vector<StormByte::Safe::String>` arguments. Native filesystem-path conversion stays inside System, so neither `std::filesystem::path` nor `std::vector` crosses the DLL boundary.
 - Pipe construction and I/O no longer throw. Invalid pipes convert to `false`.
 - Public text across a DLL boundary uses `StormByte::Safe::String` / `StormByte::Safe::CString`.
 - **Breaking:** System vendors [StormByte Base 2.0.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.0.0) directly instead of StormByte-String and exposes Base's `StormByte::Safe` owned-text types in its public API. Headers include `StormByte/safe/*.hxx` instead of `StormByte/string/*.hxx`, `StormByte/cstring.hxx` and `StormByte/wcstring.hxx`.

@@ -71,8 +71,8 @@ namespace {
 		return s;
 	}
 
-	std::vector<String> Args(std::initializer_list<const char*> items) {
-		std::vector<String> out;
+	StormByte::Safe::Vector<String> Args(std::initializer_list<const char*> items) {
+		StormByte::Safe::Vector<String> out;
 		out.reserve(items.size());
 		for (const char* item : items)
 			out.emplace_back(item);
@@ -90,7 +90,7 @@ namespace {
 // -------------------
 int test_basic_execution() {
 	const std::string fn = "test_basic_execution";
-	Process proc("echo", Args({"Hello, World!"}));
+	Process proc(String("echo"), Args({"Hello, World!"}));
 	ASSERT_TRUE(fn, static_cast<bool>(proc));
 	ASSERT_FALSE(fn, static_cast<bool>(proc.Fault()));
 	String output;

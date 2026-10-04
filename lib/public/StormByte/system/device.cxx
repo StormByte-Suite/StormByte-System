@@ -336,8 +336,13 @@ namespace {
 		const int link_rc = lstat(path.c_str(), &linkst);
 		if (link_rc == 0 && S_ISLNK(linkst.st_mode)) {
 			struct stat tgt {};
-			if (stat(path.c_str(), &tgt) != 0)
-				return Fail(Device::Error::BrokenSymlink);
+			if (stat(path.c_str(), &tgt) != 0) {
+				if (errno == EACCES || errno == EPERM)
+					return Fail(Device::Error::Permission);
+				if (errno == ENOENT || errno == ENOTDIR || errno == ELOOP)
+					return Fail(Device::Error::BrokenSymlink);
+				return Fail(Device::Error::ProbeFailed);
+			}
 		}
 
 		struct stat st {};
@@ -481,8 +486,14 @@ namespace {
 		if (wide.empty())
 			return Fail(Device::Error::DeviceNotFound);
 
-		if (IsReparse(wide) && !ExistsFollow(wide))
-			return Fail(Device::Error::BrokenSymlink);
+		if (IsReparse(wide) && !ExistsFollow(wide)) {
+			const DWORD error = GetLastError();
+			if (error == ERROR_ACCESS_DENIED)
+				return Fail(Device::Error::Permission);
+			if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+				return Fail(Device::Error::BrokenSymlink);
+			return Fail(Device::Error::ProbeFailed);
+		}
 
 		const DWORD attr = GetFileAttributesW(wide.c_str());
 		if (attr != INVALID_FILE_ATTRIBUTES) {
@@ -666,8 +677,13 @@ namespace {
 		struct stat linkst {};
 		if (lstat(path.c_str(), &linkst) == 0 && S_ISLNK(linkst.st_mode)) {
 			struct stat tgt {};
-			if (stat(path.c_str(), &tgt) != 0)
-				return Fail(Device::Error::BrokenSymlink);
+			if (stat(path.c_str(), &tgt) != 0) {
+				if (errno == EACCES || errno == EPERM)
+					return Fail(Device::Error::Permission);
+				if (errno == ENOENT || errno == ENOTDIR || errno == ELOOP)
+					return Fail(Device::Error::BrokenSymlink);
+				return Fail(Device::Error::ProbeFailed);
+			}
 		}
 
 		struct stat st {};
@@ -717,41 +733,67 @@ namespace {
 	}
 #endif
 
-	Snapshot Probe(const StormByte::Safe::String& text) noexcept {
+	Snapshot Probe(const StormByte::Safe::String& text, const bool initialization_failed) noexcept {
+		if (initialization_failed)
+			return Fail(Device::Error::ProbeFailed);
 		if (static_cast<std::string_view>(text).empty())
 			return Fail(Device::Error::DeviceNotFound);
-		const auto path = NativePath(text);
+		try {
+			const auto path = NativePath(text);
 #ifdef WINDOWS
-		return ProbeWindows(path);
+			return ProbeWindows(path);
 #elifdef MACOS
-		return ProbeMac(path);
+			return ProbeMac(path);
 #elifdef LINUX
-		return ProbeLinux(path);
+			return ProbeLinux(path);
 #else
-		static_cast<void>(path);
-		return Fail(Device::Error::ProbeFailed);
+			static_cast<void>(path);
+			return Fail(Device::Error::ProbeFailed);
 #endif
+		} catch (const std::filesystem::filesystem_error& error) {
+			if (error.code() == std::errc::permission_denied)
+				return Fail(Device::Error::Permission);
+			if (error.code() == std::errc::no_such_file_or_directory)
+				return Fail(Device::Error::DeviceNotFound);
+			if (error.code() == std::errc::too_many_symbolic_link_levels)
+				return Fail(Device::Error::BrokenSymlink);
+			return Fail(Device::Error::ProbeFailed);
+		} catch (...) {
+			return Fail(Device::Error::ProbeFailed);
+		}
 	}
 }
 
-Device::Device(const StormByte::Safe::String& path) noexcept:
-	m_path(path) {}
+Device::Device(const StormByte::Safe::String& path) noexcept {
+	try {
+		m_path = path;
+	} catch (...) {
+		m_initialization_failed = true;
+	}
+}
 
-Device::Device(const std::string_view path) noexcept:
-	m_path(path) {}
+Device::Device(const std::string_view path) noexcept {
+	try {
+		m_path = path;
+	} catch (...) {
+		m_initialization_failed = true;
+	}
+}
 
-Device::Device(const std::wstring_view path) noexcept:
-	m_path(StormByte::Safe::String(StormByte::Safe::WString(path))) {}
-
-Device::Device(const std::filesystem::path& path) noexcept:
-	Device(std::wstring_view(path.wstring())) {}
+Device::Device(const std::wstring_view path) noexcept {
+	try {
+		m_path = StormByte::Safe::String(StormByte::Safe::WString(path));
+	} catch (...) {
+		m_initialization_failed = true;
+	}
+}
 
 Device::operator bool() const noexcept {
 	return !Fault();
 }
 
 StormByte::Error::Fault Device::Fault() const noexcept {
-	return Probe(m_path).fault;
+	return Probe(m_path, m_initialization_failed).fault;
 }
 
 const StormByte::Safe::String& Device::Path() const noexcept {
@@ -759,19 +801,19 @@ const StormByte::Safe::String& Device::Path() const noexcept {
 }
 
 Kind Device::Kind() const noexcept {
-	return Probe(m_path).kind;
+	return Probe(m_path, m_initialization_failed).kind;
 }
 
 Access Device::Access() const noexcept {
-	return Probe(m_path).access;
+	return Probe(m_path, m_initialization_failed).access;
 }
 
 Throughput Device::Throughput() const noexcept {
-	return Probe(m_path).throughput;
+	return Probe(m_path, m_initialization_failed).throughput;
 }
 
 Window Device::Window() const noexcept {
-	return WindowFrom(Probe(m_path).throughput);
+	return WindowFrom(Probe(m_path, m_initialization_failed).throughput);
 }
 
 namespace StormByte::System {

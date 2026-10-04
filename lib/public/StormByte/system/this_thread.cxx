@@ -45,6 +45,7 @@
 
 #ifdef WINDOWS
 #include <windows.h>
+#include <memory>
 #else
 #include <pthread.h>
 #endif
@@ -67,6 +68,7 @@ StormByte::Error::Fault ThisThread::LastError() noexcept {
 }
 
 bool ThisThread::Name(std::string_view name) {
+	try {
 	if (name.empty() || name.find('\0') != std::string_view::npos)
 		return Store(ThisThread::Error::Failed);
 #ifdef WINDOWS
@@ -88,15 +90,24 @@ bool ThisThread::Name(std::string_view name) {
 #endif
 	return Store(ThisThread::Error::Success);
 #endif
+	} catch (...) {
+		return Store(ThisThread::Error::Failed);
+	}
 }
 
 bool ThisThread::Name(StormByte::Safe::String& name) {
+	try {
 #ifdef WINDOWS
 	PWSTR wide = nullptr;
-	if (FAILED(GetThreadDescription(GetCurrentThread(), &wide)) || wide == nullptr)
+	const HRESULT result = GetThreadDescription(GetCurrentThread(), &wide);
+	auto free_local = [](wchar_t* value) noexcept {
+		if (value != nullptr)
+			LocalFree(value);
+	};
+	std::unique_ptr<wchar_t, decltype(free_local)> owner(wide, free_local);
+	if (FAILED(result) || wide == nullptr)
 		return Store(ThisThread::Error::Failed);
 	name = StormByte::Safe::String(StormByte::Safe::WString(wide));
-	LocalFree(wide);
 	return Store(ThisThread::Error::Success);
 #else
 	char buffer[UnixNameLimit + 1] = {};
@@ -105,6 +116,9 @@ bool ThisThread::Name(StormByte::Safe::String& name) {
 	name = StormByte::Safe::String(std::string_view(buffer));
 	return Store(ThisThread::Error::Success);
 #endif
+	} catch (...) {
+		return Store(ThisThread::Error::Failed);
+	}
 }
 
 namespace StormByte::System {

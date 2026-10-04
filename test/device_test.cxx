@@ -44,8 +44,18 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#ifdef UNIX
+#include <chrono>
+#endif
 
 using StormByte::System::Device;
+
+static_assert(StormByte::Type::MaybeSafe<class Device::Access>);
+static_assert(StormByte::Type::MaybeSafe<struct Device::Throughput>);
+static_assert(StormByte::Type::MaybeSafe<struct Device::Window>);
+static_assert(StormByte::Type::SafeValue<class Device::Access>);
+static_assert(StormByte::Type::SafeValue<struct Device::Throughput>);
+static_assert(StormByte::Type::SafeValue<struct Device::Window>);
 
 namespace {
 	const char* KindName(const enum Device::Kind kind) {
@@ -108,6 +118,35 @@ int test_device_temp() {
 	RETURN_TEST(fn, 0);
 }
 
+int test_device_not_found() {
+	const std::string fn = "test_device_not_found";
+	const auto path = std::filesystem::current_path().root_path() / "StormByte-System-no-such-device-2.0.0";
+	Device device(path);
+	ASSERT_FALSE(fn, static_cast<bool>(device));
+	ASSERT_TRUE(fn, device.Fault().code() == StormByte::System::make_error_code(Device::Error::DeviceNotFound));
+	RETURN_TEST(fn, 0);
+}
+
+#ifdef UNIX
+int test_device_broken_symlink() {
+	const std::string fn = "test_device_broken_symlink";
+	const auto name = "StormByte-System-broken-link-" + std::to_string(
+		std::chrono::steady_clock::now().time_since_epoch().count());
+	const auto link = std::filesystem::temp_directory_path() / name;
+	const auto target = link.string() + "-missing-target";
+	std::error_code error;
+	std::filesystem::create_symlink(target, link, error);
+	ASSERT_FALSE(fn, static_cast<bool>(error));
+	Device device(link);
+	const bool correctly_classified = device.Fault().code() ==
+		StormByte::System::make_error_code(Device::Error::BrokenSymlink);
+	std::filesystem::remove(link, error);
+	ASSERT_FALSE(fn, static_cast<bool>(error));
+	ASSERT_TRUE(fn, correctly_classified);
+	RETURN_TEST(fn, 0);
+}
+#endif
+
 int main() {
 	int result = 0;
 
@@ -120,6 +159,10 @@ int main() {
 	// Temp
 	// -------------------
 	result += test_device_temp();
+	result += test_device_not_found();
+#ifdef UNIX
+	result += test_device_broken_symlink();
+#endif
 
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

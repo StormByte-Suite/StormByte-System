@@ -238,9 +238,9 @@ namespace StormByte::System {
 			 * @param destination Destination pipe.
 			 * @param cancelled Cancellation flag.
 			 * @param on_failure Called if the destination closes before forwarding completes.
-			 * @return Forwarding thread.
+			 * @return Provider-owned forwarding thread.
 			 */
-			static std::thread Connect(std::shared_ptr<Pipe> source, std::shared_ptr<Pipe> destination, const std::shared_ptr<std::atomic_bool>& cancelled, std::function<void()> on_failure = {});
+			static std::unique_ptr<std::thread> Connect(std::shared_ptr<Pipe> source, std::shared_ptr<Pipe> destination, const std::shared_ptr<std::atomic_bool>& cancelled, std::function<void()> on_failure = {});
 
 		private:
 			/**

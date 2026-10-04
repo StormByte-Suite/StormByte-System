@@ -101,7 +101,7 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Name | Role |
 |------|------|
-| `Process` | Spawn and talk to a child. `operator bool` is true only while the child is live. `Fault()` is `StormByte.System.Process`. |
+| `Process` | Spawn and talk to a child. `operator bool` is true only while the child is live. `Pid()` exposes only its scalar process ID; native process/thread handles stay private to the owner. `Fault()` is `StormByte.System.Process`. |
 | `Device` | Medium behind a path. `operator bool` is probe success, not permission. `Fault()` is `StormByte.System.Device`. `Throughput` / `Window` are virtual. |
 | `Directory` | `Current`, `Home`, `Temporary`, `CurrentExecutable`. `bool` + out `String`. `LastError()` is TLS in this module. |
 | `File` | `Temporary(prefix, suffix)` (caller unlinks) and `CurrentExecutable`. Same `bool` + `LastError` contract. |
@@ -238,6 +238,8 @@ A failed Windows expand returns the original text (same idea as a missing UNIX `
 ## Design notes
 
 - `Process` construction starts the child immediately and does not throw. `operator bool` is live status only.
+- Windows process and thread handles remain inside `Process` and are closed by `Wait()` or destruction; `Pid()` returns only the child ID.
+- The private `Process` implementation uses `StormByte::Safe::Unique` and is destroyed by the System module.
 - Timed `Wait` sets `TimedOut` and leaves the child running.
 - On UNIX, System ignores `SIGPIPE` once process-wide so a closed pipe peer reports write failure instead of killing the host.
 - Windows `Suspend()` / `Resume()` snapshot the child threads; a thread created during enumeration may be missed.
@@ -250,7 +252,7 @@ A failed Windows expand returns the original text (same idea as a missing UNIX `
 
 ## Testing
 
-Enable tests in CMake (`ENABLE_TEST`) and run CTest from the build tree. Device, Directory, File, Host and ThisThread print probe data and always return success (the machine is not a fixture). Process tests assert error codes. Use `ctest -V` to see stdout.
+Enable tests in CMake (`ENABLE_TEST`) and run CTest from the build tree. Process, Device and File tests assert lifecycle and error behavior; Directory, Host and ThisThread also print machine-dependent probe data. Use `ctest -V` to see stdout.
 
 ## Contributing
 

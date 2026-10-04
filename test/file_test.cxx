@@ -44,6 +44,9 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#ifdef UNIX
+#include <cstdlib>
+#endif
 
 using StormByte::Safe::String;
 
@@ -75,10 +78,33 @@ int test_file_temporary() {
 	String path;
 	const bool ok = StormByte::System::File::Temporary(path, "SB", ".tmp");
 	Dump("temporary", ok, path);
-	if (ok)
-		std::filesystem::remove(std::filesystem::path(std::string(path)));
+	ASSERT_TRUE(fn, ok);
+	const auto native_path = std::filesystem::path(std::string(path));
+	ASSERT_TRUE(fn, std::filesystem::exists(native_path));
+	std::filesystem::remove(native_path);
+	ASSERT_FALSE(fn, std::filesystem::exists(native_path));
 	RETURN_TEST(fn, 0);
 }
+
+#ifdef UNIX
+int test_file_temporary_missing_directory() {
+	const std::string fn = "test_file_temporary_missing_directory";
+	const char* previous = std::getenv("TMPDIR");
+	const bool had_previous = previous != nullptr;
+	const std::string previous_value = had_previous ? previous : "";
+	setenv("TMPDIR", "/stormbyte-system-no-such-temp-directory-2.0.0", 1);
+	String path;
+	const bool created = StormByte::System::File::Temporary(path);
+	const auto error = StormByte::System::File::LastError().code();
+	if (had_previous)
+		setenv("TMPDIR", previous_value.c_str(), 1);
+	else
+		unsetenv("TMPDIR");
+	ASSERT_FALSE(fn, created);
+	ASSERT_TRUE(fn, error == StormByte::System::make_error_code(StormByte::System::File::Error::NotFound));
+	RETURN_TEST(fn, 0);
+}
+#endif
 
 int main() {
 	int result = 0;
@@ -92,6 +118,9 @@ int main() {
 	// Temporary
 	// -------------------
 	result += test_file_temporary();
+#ifdef UNIX
+	result += test_file_temporary_missing_directory();
+#endif
 
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

@@ -48,6 +48,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace StormByte::System {
@@ -82,6 +83,79 @@ namespace StormByte::System {
 			 * @brief Windows process and thread handles.
 			 */
 			PROCESS_INFORMATION m_piProcInfo {};
+
+			/**
+			 * @struct SuspendedThread
+			 * @brief Owns one thread handle and the single suspension added by Process.
+			 */
+			struct SuspendedThread {
+				/** @brief Thread identifier used to avoid suspending it twice. */
+				DWORD id{};
+
+				/** @brief Handle retained until this Process resumes the thread. */
+				HANDLE handle{nullptr};
+
+				/**
+				 * @brief Take ownership of the handle for a successfully suspended thread.
+				 * @param thread_id Native thread identifier.
+				 * @param thread_handle Open thread handle.
+				 */
+				SuspendedThread(DWORD thread_id, HANDLE thread_handle) noexcept:
+					id(thread_id), handle(thread_handle) {}
+
+				/**
+				 * @brief Copy construction is disabled for unique handle ownership.
+				 * @param other Owner not copied.
+				 */
+				SuspendedThread(const SuspendedThread& other) = delete;
+
+				/**
+				 * @brief Transfer thread-handle ownership.
+				 * @param other Owner being moved from.
+				 */
+				SuspendedThread(SuspendedThread&& other) noexcept:
+					id(other.id), handle(std::exchange(other.handle, nullptr)) {}
+
+				/**
+				 * @brief Copy assignment is disabled for unique handle ownership.
+				 * @param other Owner not copied.
+				 * @return This owner.
+				 */
+				SuspendedThread& operator=(const SuspendedThread& other) = delete;
+
+				/**
+				 * @brief Release this handle and transfer another suspension owner.
+				 * @param other Owner being moved from.
+				 * @return This owner.
+				 */
+				SuspendedThread& operator=(SuspendedThread&& other) noexcept {
+					if (this != &other) {
+						if (handle != nullptr)
+							CloseHandle(handle);
+						id = other.id;
+						handle = std::exchange(other.handle, nullptr);
+					}
+					return *this;
+				}
+
+				/**
+				 * @brief Close the retained thread handle.
+				 */
+				~SuspendedThread() noexcept {
+					if (handle != nullptr)
+						CloseHandle(handle);
+				}
+			};
+
+			/**
+			 * @brief Handles for threads suspended by this Process and still requiring one resume.
+			 */
+			std::vector<SuspendedThread> m_suspended_threads;
+
+			/**
+			 * @brief Whether a previous suspend/resume pass left threads in a partial state.
+			 */
+			bool m_suspension_incomplete{false};
 #endif
 
 			/**

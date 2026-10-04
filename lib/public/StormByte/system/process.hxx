@@ -43,6 +43,7 @@
 #pragma once
 
 #include <StormByte/safe/cstring.hxx>
+#include <StormByte/safe/pointers.hxx>
 #include <StormByte/safe/vector.hxx>
 #include <StormByte/error.hxx>
 #include <StormByte/safe/string.hxx>
@@ -50,7 +51,6 @@
 
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -104,7 +104,8 @@ namespace StormByte::System {
 				AlreadyExited,			///< The child has already exited
 				TimedOut,				///< A timed wait expired
 				BrokenPipe,				///< stdin/stdout/stderr pipe is closed or unusable
-				Canceled				///< The operation was canceled
+				Canceled,					///< The operation was canceled
+				OperationFailed			///< A process operation failed at the platform boundary
 			};
 
 			/**
@@ -129,8 +130,7 @@ namespace StormByte::System {
 			 * @param prog Executable path or name. Copied into Base-owned text before crossing the DLL boundary.
 			 * @param args Argument list (not including argv[0]).
 			 */
-			Process(std::string_view prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args = {}) noexcept:
-				Process(StormByte::Safe::String(prog), args) {}
+			Process(std::string_view prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args = {}) noexcept;
 
 			Process(const Process& proc) = delete;
 
@@ -197,10 +197,10 @@ namespace StormByte::System {
 			DWORD Wait(std::chrono::milliseconds timeout) noexcept;
 
 			/**
-			 * @brief Windows PROCESS_INFORMATION.
-			 * @return Info (zeroed if moved-from). The returned handles remain owned by Process.
+			 * @brief Child process identifier.
+			 * @return Process identifier, or zero if no child is owned.
 			 */
-			PROCESS_INFORMATION Pid();
+			DWORD Pid() noexcept;
 			#endif
 
 			/**
@@ -296,6 +296,13 @@ namespace StormByte::System {
 			void Send(std::string_view str);
 
 			/**
+			 * @brief Initialize owned process state and start the child.
+			 * @param prog Executable path or name.
+			 * @param args Argument list (not including argv[0]).
+			 */
+			void Initialize(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args);
+
+			/**
 			 * @brief Spawn the child process.
 			 */
 			void Run();
@@ -316,7 +323,7 @@ namespace StormByte::System {
 			 */
 			void StopForwarder(bool close_source_read) noexcept;
 
-			std::unique_ptr<ProcessImplementation> m_implementation;
+			StormByte::Safe::Unique<ProcessImplementation> m_implementation; ///< Provider-owned opaque process state.
 	};
 
 }
@@ -353,6 +360,8 @@ struct StormByte::Error::Domain<StormByte::System::Process::Error> {
 				return "Process pipe is broken";
 			case StormByte::System::Process::Error::Canceled:
 				return "Process operation canceled";
+			case StormByte::System::Process::Error::OperationFailed:
+				return "Process operation failed";
 		}
 		return "Unknown Process error";
 	}

@@ -316,47 +316,50 @@ bool Pipe::WriteAtomic(StormByte::Safe::String&& data, const std::shared_ptr<std
 	return WriteAtomic(static_cast<std::string_view>(data), cancelled);
 }
 
-std::thread Pipe::Connect(std::shared_ptr<Pipe> source, std::shared_ptr<Pipe> destination, const std::shared_ptr<std::atomic_bool>& cancelled, std::function<void()> on_failure) {
-	return std::thread([source = std::move(source), destination = std::move(destination), cancelled, on_failure = std::move(on_failure)] {
+std::unique_ptr<std::thread> Pipe::Connect(std::shared_ptr<Pipe> source, std::shared_ptr<Pipe> destination, const std::shared_ptr<std::atomic_bool>& cancelled, std::function<void()> on_failure) {
+	return std::make_unique<std::thread>([source = std::move(source), destination = std::move(destination), cancelled, on_failure = std::move(on_failure)] {
+		bool forwarding = true;
+		try {
 #ifdef UNIX
-		StormByte::BinaryData buffer;
-		buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
-		ssize_t bytes_read;
-		bool forwarding = true;
-		while (forwarding) {
-			if (!source->WaitReadable(cancelled))
-				break;
-			bytes_read = source->Read(buffer, static_cast<ssize_t>(MAX_READ_BYTES));
-			if (bytes_read > 0)
-				forwarding = destination->WriteAtomic(std::string_view(reinterpret_cast<const char*>(buffer.data()), static_cast<size_t>(bytes_read)), cancelled);
-			else if (bytes_read == 0)
-				break;
-			else if (errno != EINTR)
-				forwarding = false;
-		}
-
-		if (!forwarding && (!cancelled || !cancelled->load()) && on_failure)
-			on_failure();
+			StormByte::BinaryData buffer;
+			buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
+			ssize_t bytes_read;
+			while (forwarding) {
+				if (!source->WaitReadable(cancelled))
+					break;
+				bytes_read = source->Read(buffer, static_cast<ssize_t>(MAX_READ_BYTES));
+				if (bytes_read > 0)
+					forwarding = destination->WriteAtomic(std::string_view(reinterpret_cast<const char*>(buffer.data()), static_cast<size_t>(bytes_read)), cancelled);
+				else if (bytes_read == 0)
+					break;
+				else if (errno != EINTR)
+					forwarding = false;
+			}
 #else
-		StormByte::BinaryData buffer;
-		buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
-		DWORD bytes_read;
-		bool forwarding = true;
-		while (forwarding) {
-			if (!source->WaitReadable(cancelled))
-				break;
-			bytes_read = source->Read(buffer, static_cast<DWORD>(MAX_READ_BYTES));
-			if (bytes_read > 0)
-				forwarding = destination->WriteAtomic(std::string_view(reinterpret_cast<const char*>(buffer.data()), static_cast<size_t>(bytes_read)), cancelled);
-			else if (GetLastError() != ERROR_SUCCESS && GetLastError() != ERROR_BROKEN_PIPE)
-				forwarding = false;
-			else
-				break;
+			StormByte::BinaryData buffer;
+			buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
+			DWORD bytes_read;
+			while (forwarding) {
+				if (!source->WaitReadable(cancelled))
+					break;
+				bytes_read = source->Read(buffer, static_cast<DWORD>(MAX_READ_BYTES));
+				if (bytes_read > 0)
+					forwarding = destination->WriteAtomic(std::string_view(reinterpret_cast<const char*>(buffer.data()), static_cast<size_t>(bytes_read)), cancelled);
+				else if (GetLastError() != ERROR_SUCCESS && GetLastError() != ERROR_BROKEN_PIPE)
+					forwarding = false;
+				else
+					break;
+			}
+#endif
+		} catch (...) {
+			forwarding = false;
 		}
 
-		if (!forwarding && (!cancelled || !cancelled->load()) && on_failure)
-			on_failure();
-#endif
+		if (!forwarding && (!cancelled || !cancelled->load()) && on_failure) {
+			try {
+				on_failure();
+			} catch (...) {}
+		}
 		destination->CloseWrite();
 	});
 }

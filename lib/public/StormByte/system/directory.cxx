@@ -61,6 +61,14 @@ using namespace StormByte::System;
 namespace {
 	thread_local StormByte::Error::Fault g_last{make_error_code(Directory::Error::Success)};
 
+	Directory::Error FromFilesystemError(const std::error_code& error) noexcept {
+		if (error == std::errc::permission_denied)
+			return Directory::Error::Permission;
+		if (error == std::errc::no_such_file_or_directory)
+			return Directory::Error::NotFound;
+		return Directory::Error::Failed;
+	}
+
 	bool Store(const enum Directory::Error code) {
 		g_last = StormByte::Error::Fault{make_error_code(code)};
 		return code == Directory::Error::Success;
@@ -116,48 +124,66 @@ bool Directory::Current(StormByte::Safe::String& path) {
 	try {
 		path = FromNative(std::filesystem::current_path());
 		return Store(Directory::Error::Success);
-	} catch (const std::filesystem::filesystem_error&) {
+	} catch (const std::filesystem::filesystem_error& error) {
+		return Store(FromFilesystemError(error.code()));
+	} catch (...) {
 		return Store(Directory::Error::Failed);
 	}
 }
 
 bool Directory::Home(StormByte::Safe::String& path) {
+	try {
 #ifdef WINDOWS
-	const StormByte::Safe::String home = Variable::Expand("%USERPROFILE%");
+		const StormByte::Safe::String home = Variable::Expand("%USERPROFILE%");
 #else
-	const StormByte::Safe::String home = Variable::Expand("~");
+		const StormByte::Safe::String home = Variable::Expand("~");
 #endif
-	if (home.empty())
-		return Store(Directory::Error::NotFound);
-	path = home;
-	return Store(Directory::Error::Success);
+		if (home.empty())
+			return Store(Directory::Error::NotFound);
+		path = home;
+		return Store(Directory::Error::Success);
+	} catch (...) {
+		return Store(Directory::Error::Failed);
+	}
 }
 
 bool Directory::Temporary(StormByte::Safe::String& path) {
+	try {
 #ifdef WINDOWS
-	wchar_t tempPath[MAX_PATH];
-	const DWORD n = GetTempPathW(MAX_PATH, tempPath);
-	if (n == 0 || n >= MAX_PATH)
-		return Store(Directory::Error::Failed);
-	path = FromNative(std::filesystem::path(std::wstring(tempPath, n)));
-	return Store(Directory::Error::Success);
+		wchar_t tempPath[MAX_PATH];
+		const DWORD n = GetTempPathW(MAX_PATH, tempPath);
+		if (n == 0 || n >= MAX_PATH)
+			return Store(Directory::Error::Failed);
+		path = FromNative(std::filesystem::path(std::wstring(tempPath, n)));
+		return Store(Directory::Error::Success);
 #else
-	const char* env = std::getenv("TMPDIR");
-	if (env == nullptr || *env == '\0')
-		env = std::getenv("TMP");
-	if (env == nullptr || *env == '\0')
-		env = std::getenv("TEMP");
-	path = FromNative((env != nullptr && *env != '\0') ? std::filesystem::path(env) : std::filesystem::path("/tmp"));
-	return Store(Directory::Error::Success);
+		const char* env = std::getenv("TMPDIR");
+		if (env == nullptr || *env == '\0')
+			env = std::getenv("TMP");
+		if (env == nullptr || *env == '\0')
+			env = std::getenv("TEMP");
+		path = FromNative((env != nullptr && *env != '\0') ? std::filesystem::path(env) : std::filesystem::path("/tmp"));
+		return Store(Directory::Error::Success);
 #endif
+	} catch (const std::filesystem::filesystem_error& error) {
+		return Store(FromFilesystemError(error.code()));
+	} catch (...) {
+		return Store(Directory::Error::Failed);
+	}
 }
 
 bool Directory::CurrentExecutable(StormByte::Safe::String& path) {
-	const std::filesystem::path file = ExecutableFile();
-	if (file.empty())
+	try {
+		const std::filesystem::path file = ExecutableFile();
+		if (file.empty())
+			return Store(Directory::Error::Failed);
+		path = FromNative(file.parent_path());
+		return Store(Directory::Error::Success);
+	} catch (const std::filesystem::filesystem_error& error) {
+		return Store(FromFilesystemError(error.code()));
+	} catch (...) {
 		return Store(Directory::Error::Failed);
-	path = FromNative(file.parent_path());
-	return Store(Directory::Error::Success);
+	}
 }
 
 namespace StormByte::System {

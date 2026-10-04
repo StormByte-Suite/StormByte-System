@@ -48,6 +48,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <StormByte/type_traits/safe.hxx>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -58,10 +59,13 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #endif
 
 using StormByte::Safe::String;
 using StormByte::System::Process;
+
+static_assert(StormByte::Type::IsSafe<StormByte::Safe::Vector<String>>::value);
 
 namespace {
 	std::string Trim(std::string s) {
@@ -101,6 +105,15 @@ int test_basic_execution() {
 	RETURN_TEST(fn, 0);
 }
 
+int test_process_pid() {
+	const std::string fn = "test_process_pid";
+	Process proc("sleep", Args({"1"}));
+	ASSERT_TRUE(fn, proc.Pid() > 0);
+	ASSERT_EQUAL(fn, 0, proc.Wait());
+	ASSERT_EQUAL(fn, -1, proc.Pid());
+	RETURN_TEST(fn, 0);
+}
+
 int test_process_to_ostream() {
 	const std::string fn = "test_process_to_ostream";
 	Process proc("echo", Args({"Hello, World!"}));
@@ -135,6 +148,17 @@ int test_wait_already_exited() {
 	Process proc("true");
 	ASSERT_EQUAL(fn, 0, proc.Wait());
 	ASSERT_FALSE(fn, static_cast<bool>(proc));
+	ASSERT_EQUAL(fn, -1, proc.Wait());
+	ASSERT_TRUE(fn, IsProcessError(proc, StormByte::System::Process::Error::AlreadyExited));
+	RETURN_TEST(fn, 0);
+}
+
+int test_wait_after_external_reap() {
+	const std::string fn = "test_wait_after_external_reap";
+	Process proc("true");
+	const pid_t child = proc.Pid();
+	ASSERT_TRUE(fn, child > 0);
+	ASSERT_EQUAL(fn, child, waitpid(child, nullptr, 0));
 	ASSERT_EQUAL(fn, -1, proc.Wait());
 	ASSERT_TRUE(fn, IsProcessError(proc, StormByte::System::Process::Error::AlreadyExited));
 	RETURN_TEST(fn, 0);
@@ -185,6 +209,16 @@ int test_signaled_process() {
 	RETURN_TEST(fn, 0);
 }
 
+int test_suspend_resume() {
+	const std::string fn = "test_suspend_resume";
+	Process proc("sleep", Args({"1"}));
+	proc.Suspend();
+	ASSERT_TRUE(fn, static_cast<bool>(proc));
+	proc.Resume();
+	ASSERT_EQUAL(fn, 0, proc.Wait());
+	RETURN_TEST(fn, 0);
+}
+
 // -------------------
 // Move
 // -------------------
@@ -206,6 +240,7 @@ int test_move_process() {
 	Process original("echo", Args({"moved"}));
 	Process moved(std::move(original));
 	ASSERT_FALSE(fn, static_cast<bool>(original));
+	ASSERT_TRUE(fn, IsProcessError(original, StormByte::System::Process::Error::NotRunning));
 	ASSERT_TRUE(fn, static_cast<bool>(moved));
 	(void)original.Wait();
 	String output;
@@ -453,7 +488,7 @@ int test_wait_interrupted_by_signal() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(25));
 		pthread_kill(main_thread, SIGUSR1);
 	});
-	const int exit_code = proc.Wait();
+	const int exit_code = proc.Wait(std::chrono::milliseconds(1500));
 	interrupter.join();
 	sigaction(SIGUSR1, &previous, nullptr);
 	ASSERT_EQUAL(fn, 1, wait_interrupt_signal);
@@ -492,6 +527,15 @@ int test_basic_execution_windows() {
 	ASSERT_EQUAL(fn, "Hello, World!", Trim(std::string(output)));
 	ASSERT_EQUAL(fn, 0u, proc.Wait());
 	ASSERT_FALSE(fn, static_cast<bool>(proc));
+	RETURN_TEST(fn, 0);
+}
+
+int test_process_pid_windows() {
+	const std::string fn = "test_process_pid_windows";
+	Process proc("cmd.exe", Args({"/d", "/c", "exit /b 0"}));
+	ASSERT_TRUE(fn, proc.Pid() != 0);
+	ASSERT_EQUAL(fn, 0u, proc.Wait());
+	ASSERT_EQUAL(fn, 0u, proc.Pid());
 	RETURN_TEST(fn, 0);
 }
 
@@ -573,6 +617,16 @@ int test_exit_code_windows() {
 	RETURN_TEST(fn, 0);
 }
 
+int test_suspend_resume_windows() {
+	const std::string fn = "test_suspend_resume_windows";
+	Process proc("cmd.exe", Args({"/d", "/c", "timeout /t 2 /nobreak >NUL"}));
+	proc.Suspend();
+	ASSERT_TRUE(fn, static_cast<bool>(proc));
+	proc.Resume();
+	ASSERT_EQUAL(fn, 0u, proc.Wait());
+	RETURN_TEST(fn, 0);
+}
+
 // -------------------
 // Move
 // -------------------
@@ -581,6 +635,7 @@ int test_move_process_windows() {
 	Process original("cmd.exe", Args({"/d", "/c", "echo moved"}));
 	Process moved(std::move(original));
 	(void)original.Wait();
+	ASSERT_TRUE(fn, IsProcessError(original, StormByte::System::Process::Error::NotRunning));
 	String output;
 	moved >> output;
 	ASSERT_EQUAL(fn, "moved", Trim(std::string(output)));
@@ -637,6 +692,7 @@ int main() {
 	// Basic
 	// -------------------
 	result += test_basic_execution();
+	result += test_process_pid();
 	result += test_process_to_ostream();
 
 	// -------------------
@@ -645,6 +701,7 @@ int main() {
 	result += test_missing_executable();
 	result += test_missing_executable_on_path();
 	result += test_wait_already_exited();
+	result += test_wait_after_external_reap();
 	result += test_wait_timeout_sets_timed_out();
 	result += test_write_after_consumer_exit();
 
@@ -654,6 +711,7 @@ int main() {
 	result += test_exit_code_false();
 	result += test_exit_code_true();
 	result += test_signaled_process();
+	result += test_suspend_resume();
 
 	// -------------------
 	// Move
@@ -701,6 +759,7 @@ int main() {
 	// Basic
 	// -------------------
 	result += test_basic_execution_windows();
+	result += test_process_pid_windows();
 	result += test_dir_lists_something();
 	result += test_windows_argument_with_quotes();
 	result += test_windows_argument_with_space();
@@ -717,6 +776,7 @@ int main() {
 	// Exit
 	// -------------------
 	result += test_exit_code_windows();
+	result += test_suspend_resume_windows();
 
 	// -------------------
 	// Move

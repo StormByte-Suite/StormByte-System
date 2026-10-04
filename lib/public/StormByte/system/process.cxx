@@ -87,10 +87,48 @@ namespace {
 		impl.m_pid = -1;
 #endif
 	}
+
+#ifdef UNIX
+	Process::Error ProcessErrorFromNative(const int error) noexcept {
+		if (error == ECHILD || error == ESRCH)
+			return Process::Error::AlreadyExited;
+		if (error == EACCES || error == EPERM)
+			return Process::Error::Permission;
+		return Process::Error::OperationFailed;
+	}
+#else
+	Process::Error ProcessErrorFromNative(const DWORD error) noexcept {
+		if (error == ERROR_ACCESS_DENIED)
+			return Process::Error::Permission;
+		if (error == ERROR_INVALID_HANDLE || error == ERROR_INVALID_PARAMETER)
+			return Process::Error::AlreadyExited;
+		return Process::Error::OperationFailed;
+	}
+#endif
 }
 
-Process::Process(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) noexcept:
-	m_implementation(std::make_unique<ProcessImplementation>()) {
+Process::Process(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) noexcept {
+	try {
+		m_implementation = StormByte::Safe::Heap::MakeUnique<ProcessImplementation>();
+		Initialize(prog, args);
+	} catch (...) {
+		if (m_implementation)
+			Fail(*m_implementation, Process::Error::CreationFailed);
+	}
+}
+
+Process::Process(const std::string_view prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) noexcept {
+	try {
+		m_implementation = StormByte::Safe::Heap::MakeUnique<ProcessImplementation>();
+		const StormByte::Safe::String owned_program(prog);
+		Initialize(owned_program, args);
+	} catch (...) {
+		if (m_implementation)
+			Fail(*m_implementation, Process::Error::CreationFailed);
+	}
+}
+
+void Process::Initialize(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) {
 	m_implementation->m_status = Status::RUNNING;
 #ifdef UNIX
 	m_implementation->m_pid = -1;
@@ -130,6 +168,7 @@ void Process::ReleaseOwnership() noexcept {
 #ifdef UNIX
 	m_implementation->m_pid = -1;
 #else
+	m_implementation->m_suspended_threads.clear();
 	ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
 	ZeroMemory(&m_implementation->m_siStartInfo, sizeof(STARTUPINFOW));
 #endif
@@ -196,20 +235,25 @@ Process& Process::operator>>(Process& exe) {
 	if (m_implementation->m_forwarder && m_implementation->m_forwarder->joinable())
 		StopForwarder(false);
 
-	m_implementation->m_forwarder_cancel = std::make_shared<std::atomic_bool>(false);
+	try {
+		m_implementation->m_forwarder_cancel = std::make_shared<std::atomic_bool>(false);
 #ifdef UNIX
 	const pid_t source_pid = m_implementation->m_pid;
-	m_implementation->m_forwarder = std::make_unique<std::thread>(Pipe::Connect(m_implementation->m_pstdout, exe.m_implementation->m_pstdin, m_implementation->m_forwarder_cancel, [source_pid] {
+	m_implementation->m_forwarder = Pipe::Connect(m_implementation->m_pstdout, exe.m_implementation->m_pstdin, m_implementation->m_forwarder_cancel, [source_pid] {
 		if (source_pid > 0)
 			kill(source_pid, SIGTERM);
-	}));
+	});
 #else
 	const HANDLE source_process = m_implementation->m_piProcInfo.hProcess;
-	m_implementation->m_forwarder = std::make_unique<std::thread>(Pipe::Connect(m_implementation->m_pstdout, exe.m_implementation->m_pstdin, m_implementation->m_forwarder_cancel, [source_process] {
+	m_implementation->m_forwarder = Pipe::Connect(m_implementation->m_pstdout, exe.m_implementation->m_pstdin, m_implementation->m_forwarder_cancel, [source_process] {
 		if (source_process != nullptr)
 			TerminateProcess(source_process, 0);
-	}));
+	});
 #endif
+	} catch (...) {
+		m_implementation->m_forwarder_cancel.reset();
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::CreationFailed)};
+	}
 	return exe;
 }
 
@@ -249,6 +293,13 @@ void Process::operator<<(const System::_EoF&) {
 
 void Process::Run() {
 #ifdef UNIX
+	std::vector<char*> argv;
+	argv.reserve(m_implementation->m_arguments.size() + 2);
+	argv.push_back(const_cast<char*>(m_implementation->m_program.c_str()));
+	for (std::string& argument : m_implementation->m_arguments)
+		argv.push_back(argument.data());
+	argv.push_back(nullptr);
+
 	int exec_status[2] = { -1, -1 };
 #ifdef LINUX
 	if (pipe2(exec_status, O_CLOEXEC) == -1) {
@@ -307,12 +358,6 @@ void Process::Run() {
 			_exit(127);
 		}
 
-		std::vector<char*> argv;
-		argv.reserve(m_implementation->m_arguments.size() + 2);
-		argv.push_back(const_cast<char*>(m_implementation->m_program.c_str()));
-		for (size_t i = 0; i < m_implementation->m_arguments.size(); i++)
-			argv.push_back(m_implementation->m_arguments[i].data());
-		argv.push_back(nullptr);
 		execvp(m_implementation->m_program.c_str(), argv.data());
 		report_exec_error();
 		_exit(127);
@@ -430,6 +475,7 @@ int Process::Wait() noexcept {
 	if (result == -1) {
 		m_implementation->m_status = Status::TERMINATED;
 		m_implementation->m_pid = -1;
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(errno))};
 		if (m_implementation->m_forwarder)
 			JoinForwarder();
 		return -1;
@@ -463,9 +509,17 @@ int Process::Wait(std::chrono::milliseconds timeout) noexcept {
 			return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 		}
 
-		if (result == -1 || std::chrono::steady_clock::now() >= deadline) {
-			if (std::chrono::steady_clock::now() >= deadline)
-				m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::TimedOut)};
+		if (result == -1 && errno != EINTR) {
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(errno))};
+			m_implementation->m_status = Status::TERMINATED;
+			m_implementation->m_pid = -1;
+			if (m_implementation->m_forwarder)
+				StopForwarder(true);
+			return -1;
+		}
+
+		if (std::chrono::steady_clock::now() >= deadline) {
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::TimedOut)};
 			if (m_implementation->m_forwarder)
 				StopForwarder(true);
 			return -1;
@@ -493,20 +547,20 @@ DWORD Process::Wait() noexcept {
 
 	DWORD exitCode = 0;
 	if (WaitForSingleObject(m_implementation->m_piProcInfo.hProcess, INFINITE) == WAIT_FAILED) {
-		CloseHandle(m_implementation->m_piProcInfo.hProcess);
-		CloseHandle(m_implementation->m_piProcInfo.hThread);
-		ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
-		m_implementation->m_status = Status::TERMINATED;
-		if (m_implementation->m_forwarder)
-			JoinForwarder();
+		const DWORD error = GetLastError();
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(error))};
 		return static_cast<DWORD>(-1);
 	}
 
 	if (!GetExitCodeProcess(m_implementation->m_piProcInfo.hProcess, &exitCode)) {
+		const DWORD error = GetLastError();
 		CloseHandle(m_implementation->m_piProcInfo.hProcess);
 		CloseHandle(m_implementation->m_piProcInfo.hThread);
+		m_implementation->m_suspended_threads.clear();
+		m_implementation->m_suspension_incomplete = false;
 		ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
 		m_implementation->m_status = Status::TERMINATED;
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(error))};
 		if (m_implementation->m_forwarder)
 			JoinForwarder();
 		return static_cast<DWORD>(-1);
@@ -514,6 +568,8 @@ DWORD Process::Wait() noexcept {
 
 	CloseHandle(m_implementation->m_piProcInfo.hProcess);
 	CloseHandle(m_implementation->m_piProcInfo.hThread);
+	m_implementation->m_suspended_threads.clear();
+	m_implementation->m_suspension_incomplete = false;
 	ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
 	m_implementation->m_status = Status::TERMINATED;
 	if (m_implementation->m_forwarder)
@@ -533,6 +589,8 @@ DWORD Process::Wait(std::chrono::milliseconds timeout) noexcept {
 	if (wait_result != WAIT_OBJECT_0) {
 		if (wait_result == WAIT_TIMEOUT)
 			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::TimedOut)};
+		else
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
 		if (m_implementation->m_forwarder)
 			StopForwarder(true);
 		return static_cast<DWORD>(-1);
@@ -543,85 +601,221 @@ DWORD Process::Wait(std::chrono::milliseconds timeout) noexcept {
 
 	DWORD exitCode = 0;
 	if (!GetExitCodeProcess(m_implementation->m_piProcInfo.hProcess, &exitCode)) {
+		const DWORD error = GetLastError();
 		CloseHandle(m_implementation->m_piProcInfo.hProcess);
 		CloseHandle(m_implementation->m_piProcInfo.hThread);
+		m_implementation->m_suspended_threads.clear();
+		m_implementation->m_suspension_incomplete = false;
 		ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
 		m_implementation->m_status = Status::TERMINATED;
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(error))};
 		return static_cast<DWORD>(-1);
 	}
 
 	CloseHandle(m_implementation->m_piProcInfo.hProcess);
 	CloseHandle(m_implementation->m_piProcInfo.hThread);
+	m_implementation->m_suspended_threads.clear();
+	m_implementation->m_suspension_incomplete = false;
 	ZeroMemory(&m_implementation->m_piProcInfo, sizeof(PROCESS_INFORMATION));
 	m_implementation->m_status = Status::TERMINATED;
 	return exitCode;
 }
 
-PROCESS_INFORMATION Process::Pid() {
+DWORD Process::Pid() noexcept {
 	if (!m_implementation)
-		return PROCESS_INFORMATION{};
-	return m_implementation->m_piProcInfo;
+		return 0;
+	return m_implementation->m_piProcInfo.dwProcessId;
 }
 
 #endif
 void Process::Suspend() {
-	if (!m_implementation || !*this)
+	if (!m_implementation || !*this) {
+		if (m_implementation)
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::NotRunning)};
 		return;
-#ifdef UNIX
-	if (m_implementation->m_pid > 0)
-		::kill(m_implementation->m_pid, SIGSTOP);
+	}
+	if (m_implementation->m_status == Status::SUSPENDED) {
+#ifdef WINDOWS
+		if (!m_implementation->m_suspension_incomplete)
+			return;
 #else
-	if (m_implementation->m_piProcInfo.dwProcessId == 0)
 		return;
+#endif
+	}
+#ifdef UNIX
+	if (m_implementation->m_pid <= 0 || ::kill(m_implementation->m_pid, SIGSTOP) != 0) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(
+			m_implementation->m_pid <= 0 ? Process::Error::NotRunning : ProcessErrorFromNative(errno))};
+		return;
+	}
+#else
+	const DWORD process_state = WaitForSingleObject(m_implementation->m_piProcInfo.hProcess, 0);
+	if (process_state == WAIT_OBJECT_0) {
+		(void)Wait();
+		return;
+	}
+	if (process_state == WAIT_FAILED) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
+		return;
+	}
+	for (auto thread = m_implementation->m_suspended_threads.begin(); thread != m_implementation->m_suspended_threads.end();) {
+		if (WaitForSingleObject(thread->handle, 0) == WAIT_OBJECT_0)
+			thread = m_implementation->m_suspended_threads.erase(thread);
+		else
+			++thread;
+	}
+	if (m_implementation->m_suspended_threads.empty()) {
+		m_implementation->m_status = Status::RUNNING;
+		m_implementation->m_suspension_incomplete = false;
+	}
+	if (m_implementation->m_piProcInfo.dwProcessId == 0) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::NotRunning)};
+		return;
+	}
 	HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-	if (hThreadSnap == INVALID_HANDLE_VALUE)
+	if (hThreadSnap == INVALID_HANDLE_VALUE) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
 		return;
-	THREADENTRY32 te32;
-	te32.dwSize = sizeof(THREADENTRY32);
-	if (Thread32First(hThreadSnap, &te32)) {
+	}
+	bool snapshot_open = true;
+	try {
+		std::vector<DWORD> thread_ids;
+		THREADENTRY32 te32;
+		te32.dwSize = sizeof(THREADENTRY32);
+		if (!Thread32First(hThreadSnap, &te32)) {
+			const DWORD error = GetLastError();
+			CloseHandle(hThreadSnap);
+			snapshot_open = false;
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(error))};
+			return;
+		}
 		do {
-			if (te32.th32OwnerProcessID == m_implementation->m_piProcInfo.dwProcessId) {
-				HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te32.th32ThreadID);
-				if (hThread != NULL) {
-					SuspendThread(hThread);
-					CloseHandle(hThread);
+			if (te32.th32OwnerProcessID == m_implementation->m_piProcInfo.dwProcessId)
+				thread_ids.push_back(te32.th32ThreadID);
+		} while (Thread32Next(hThreadSnap, &te32));
+		const DWORD enumeration_error = GetLastError();
+		CloseHandle(hThreadSnap);
+		snapshot_open = false;
+		if (enumeration_error != ERROR_NO_MORE_FILES) {
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(enumeration_error))};
+			return;
+		}
+		if (thread_ids.empty()) {
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::AlreadyExited)};
+			return;
+		}
+
+		m_implementation->m_suspended_threads.reserve(
+			m_implementation->m_suspended_threads.size() + thread_ids.size());
+		bool failed = false;
+		for (const DWORD thread_id : thread_ids) {
+			bool already_suspended = false;
+			for (const auto& thread : m_implementation->m_suspended_threads) {
+				if (thread.id == thread_id) {
+					already_suspended = true;
+					break;
 				}
 			}
-		} while (Thread32Next(hThreadSnap, &te32));
+			if (already_suspended)
+				continue;
+			HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | SYNCHRONIZE, FALSE, thread_id);
+			if (hThread == nullptr) {
+				const DWORD error = GetLastError();
+				if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_HANDLE)
+					continue;
+				m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(error))};
+				failed = true;
+				continue;
+			}
+			if (SuspendThread(hThread) == static_cast<DWORD>(-1)) {
+				m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
+				failed = true;
+			} else {
+				m_implementation->m_suspended_threads.emplace_back(thread_id, hThread);
+				hThread = nullptr;
+			}
+			if (hThread != nullptr)
+				CloseHandle(hThread);
+		}
+		m_implementation->m_suspension_incomplete = failed;
+		if (!m_implementation->m_suspended_threads.empty())
+			m_implementation->m_status = Status::SUSPENDED;
+		if (failed)
+			return;
+		if (m_implementation->m_suspended_threads.empty()) {
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::AlreadyExited)};
+			return;
+		}
+	} catch (...) {
+		if (snapshot_open)
+			CloseHandle(hThreadSnap);
+		m_implementation->m_suspension_incomplete = true;
+		if (!m_implementation->m_suspended_threads.empty())
+			m_implementation->m_status = Status::SUSPENDED;
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::OperationFailed)};
+		return;
 	}
-
-	CloseHandle(hThreadSnap);
+	if (m_implementation->m_status == Status::SUSPENDED)
+		return;
 #endif
 	m_implementation->m_status = Status::SUSPENDED;
 }
 
 void Process::Resume() {
-	if (!m_implementation || m_implementation->m_status != Status::SUSPENDED)
+	if (!m_implementation)
 		return;
-#ifdef UNIX
-	if (m_implementation->m_pid > 0)
-		::kill(m_implementation->m_pid, SIGCONT);
-#else
-	if (m_implementation->m_piProcInfo.dwProcessId == 0)
+	if (m_implementation->m_status != Status::SUSPENDED) {
+		if (m_implementation->m_status == Status::TERMINATED)
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(Process::Error::NotRunning)};
 		return;
-	HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-	if (hThreadSnap == INVALID_HANDLE_VALUE)
-		return;
-	THREADENTRY32 te32;
-	te32.dwSize = sizeof(THREADENTRY32);
-	if (Thread32First(hThreadSnap, &te32)) {
-		do {
-			if (te32.th32OwnerProcessID == m_implementation->m_piProcInfo.dwProcessId) {
-				HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te32.th32ThreadID);
-				if (hThread != NULL) {
-					ResumeThread(hThread);
-					CloseHandle(hThread);
-				}
-			}
-		} while (Thread32Next(hThreadSnap, &te32));
 	}
-
-	CloseHandle(hThreadSnap);
+#ifdef UNIX
+	if (m_implementation->m_pid <= 0 || ::kill(m_implementation->m_pid, SIGCONT) != 0) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(
+			m_implementation->m_pid <= 0 ? Process::Error::NotRunning : ProcessErrorFromNative(errno))};
+		return;
+	}
+#else
+	const DWORD process_state = WaitForSingleObject(m_implementation->m_piProcInfo.hProcess, 0);
+	if (process_state == WAIT_OBJECT_0) {
+		(void)Wait();
+		return;
+	}
+	if (process_state == WAIT_FAILED) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
+		return;
+	}
+	bool failed = false;
+	for (auto thread = m_implementation->m_suspended_threads.begin(); thread != m_implementation->m_suspended_threads.end();) {
+		if (WaitForSingleObject(thread->handle, 0) == WAIT_OBJECT_0) {
+			thread = m_implementation->m_suspended_threads.erase(thread);
+			continue;
+		}
+		if (ResumeThread(thread->handle) == static_cast<DWORD>(-1)) {
+			m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
+			failed = true;
+			++thread;
+		} else {
+			thread = m_implementation->m_suspended_threads.erase(thread);
+		}
+	}
+		if (failed || !m_implementation->m_suspended_threads.empty()) {
+			if (failed)
+				m_implementation->m_suspension_incomplete = true;
+		return;
+		}
+	const DWORD resumed_state = WaitForSingleObject(m_implementation->m_piProcInfo.hProcess, 0);
+	if (resumed_state == WAIT_OBJECT_0) {
+		(void)Wait();
+		return;
+	}
+	if (resumed_state == WAIT_FAILED) {
+		m_implementation->m_fault = StormByte::Error::Fault{make_error_code(ProcessErrorFromNative(GetLastError()))};
+		m_implementation->m_suspension_incomplete = false;
+		m_implementation->m_status = Status::RUNNING;
+		return;
+	}
+	m_implementation->m_suspension_incomplete = false;
 #endif
 	m_implementation->m_status = Status::RUNNING;
 }

@@ -66,6 +66,32 @@ using namespace StormByte::System;
 namespace {
 	thread_local StormByte::Error::Fault g_last{make_error_code(File::Error::Success)};
 
+#ifdef WINDOWS
+	File::Error FromNativeError(const DWORD error) noexcept {
+		if (error == ERROR_ACCESS_DENIED)
+			return File::Error::Permission;
+		if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_DIRECTORY)
+			return File::Error::NotFound;
+		return File::Error::Failed;
+	}
+#else
+	File::Error FromNativeError(const int error) noexcept {
+		if (error == EACCES || error == EPERM || error == EROFS)
+			return File::Error::Permission;
+		if (error == ENOENT)
+			return File::Error::NotFound;
+		return File::Error::Failed;
+	}
+#endif
+
+	File::Error FromFilesystemError(const std::error_code& error) noexcept {
+		if (error == std::errc::permission_denied || error == std::errc::read_only_file_system)
+			return File::Error::Permission;
+		if (error == std::errc::no_such_file_or_directory)
+			return File::Error::NotFound;
+		return File::Error::Failed;
+	}
+
 	bool Store(const enum File::Error code) {
 		g_last = StormByte::Error::Fault{make_error_code(code)};
 		return code == File::Error::Success;
@@ -126,59 +152,78 @@ StormByte::Error::Fault File::LastError() noexcept {
 }
 
 bool File::Temporary(StormByte::Safe::String& path, std::string_view prefix, std::string_view suffix) {
-	StormByte::Safe::String directory;
-	if (!Directory::Temporary(directory))
-		return Store(File::Error::Failed);
-
-#ifdef WINDOWS
-	std::wstring prefix_w(static_cast<std::wstring_view>(StormByte::Safe::WString(StormByte::Safe::String(prefix))));
-	if (prefix_w.size() > 3)
-		prefix_w.resize(3);
-	if (prefix_w.empty())
-		prefix_w = L"TMP";
-
-	wchar_t generated[MAX_PATH];
-	const StormByte::Safe::WString dir_w(directory);
-	if (GetTempFileNameW(static_cast<const wchar_t*>(dir_w), prefix_w.c_str(), 0, generated) == 0)
-		return Store(File::Error::Failed);
-
-	std::filesystem::path result(generated);
-	if (!suffix.empty()) {
-		const std::filesystem::path dest = std::filesystem::path(std::wstring(generated) +
-			std::wstring(static_cast<std::wstring_view>(StormByte::Safe::WString(StormByte::Safe::String(suffix)))));
-		if (!MoveFileW(result.c_str(), dest.c_str())) {
-			DeleteFileW(result.c_str());
+	try {
+		StormByte::Safe::String directory;
+		if (!Directory::Temporary(directory)) {
+			const auto directory_error = Directory::LastError().code();
+			if (directory_error == make_error_code(Directory::Error::Permission))
+				return Store(File::Error::Permission);
+			if (directory_error == make_error_code(Directory::Error::NotFound))
+				return Store(File::Error::NotFound);
 			return Store(File::Error::Failed);
 		}
-		result = dest;
-	}
-	path = FromNative(result);
-	return Store(File::Error::Success);
-#else
-	std::string tmpl = NativePath(directory).string();
-	if (tmpl.empty() || tmpl.back() != '/')
-		tmpl.push_back('/');
-	tmpl.append(prefix.empty() ? "TMP" : std::string(prefix));
-	tmpl.append("XXXXXX");
-	tmpl.append(suffix);
 
-	const int fd = suffix.empty()
-		? mkstemp(tmpl.data())
-		: mkstemps(tmpl.data(), static_cast<int>(suffix.size()));
-	if (fd == -1)
-		return Store((errno == EACCES || errno == EPERM) ? File::Error::Permission : File::Error::Failed);
-	::close(fd);
-	path = FromNative(std::filesystem::path(tmpl));
-	return Store(File::Error::Success);
+#ifdef WINDOWS
+		std::wstring prefix_w(static_cast<std::wstring_view>(StormByte::Safe::WString(StormByte::Safe::String(prefix))));
+		if (prefix_w.size() > 3)
+			prefix_w.resize(3);
+		if (prefix_w.empty())
+			prefix_w = L"TMP";
+
+		wchar_t generated[MAX_PATH];
+		const StormByte::Safe::WString dir_w(directory);
+		if (GetTempFileNameW(static_cast<const wchar_t*>(dir_w), prefix_w.c_str(), 0, generated) == 0)
+			return Store(FromNativeError(GetLastError()));
+
+		std::filesystem::path result(generated);
+		if (!suffix.empty()) {
+			const std::filesystem::path dest = std::filesystem::path(std::wstring(generated) +
+				std::wstring(static_cast<std::wstring_view>(StormByte::Safe::WString(StormByte::Safe::String(suffix)))));
+			if (!MoveFileW(result.c_str(), dest.c_str())) {
+				const File::Error error = FromNativeError(GetLastError());
+				DeleteFileW(result.c_str());
+				return Store(error);
+			}
+			result = dest;
+		}
+		path = FromNative(result);
+		return Store(File::Error::Success);
+#else
+		std::string tmpl = NativePath(directory).string();
+		if (tmpl.empty() || tmpl.back() != '/')
+			tmpl.push_back('/');
+		tmpl.append(prefix.empty() ? "TMP" : std::string(prefix));
+		tmpl.append("XXXXXX");
+		tmpl.append(suffix);
+
+		const int fd = suffix.empty()
+			? mkstemp(tmpl.data())
+			: mkstemps(tmpl.data(), static_cast<int>(suffix.size()));
+		if (fd == -1)
+			return Store(FromNativeError(errno));
+		::close(fd);
+		path = FromNative(std::filesystem::path(tmpl));
+		return Store(File::Error::Success);
 #endif
+	} catch (const std::filesystem::filesystem_error& error) {
+		return Store(FromFilesystemError(error.code()));
+	} catch (...) {
+		return Store(File::Error::Failed);
+	}
 }
 
 bool File::CurrentExecutable(StormByte::Safe::String& path) {
-	const std::filesystem::path file = ExecutableFile();
-	if (file.empty())
+	try {
+		const std::filesystem::path file = ExecutableFile();
+		if (file.empty())
+			return Store(File::Error::Failed);
+		path = FromNative(file);
+		return Store(File::Error::Success);
+	} catch (const std::filesystem::filesystem_error& error) {
+		return Store(FromFilesystemError(error.code()));
+	} catch (...) {
 		return Store(File::Error::Failed);
-	path = FromNative(file);
-	return Store(File::Error::Success);
+	}
 }
 
 namespace StormByte::System {

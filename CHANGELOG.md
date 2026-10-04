@@ -37,10 +37,11 @@ If you landed here from a release link and have not read the tree:
 - **Host**: name, architecture, CPU brand, OS, kernel, page size, physical/available memory, logical processors, process bitness.
 - **ThisThread**: `Sleep`; get/set thread name (`TooLong` if the platform limit is exceeded; the name is not truncated).
 - Dual license on original System sources: LGPL-3.0-or-later **or** commercial (`LICENSE` + `COPYING.LGPLv3`).
-- Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default ON). There is no `STORMBYTE_SYSTEM_SHARED` CMake option. When the library is shared, the compile definition `STORMBYTE_SYSTEM_SHARED` is still set so `visibility.h` can distinguish `dllexport` / `dllimport` / static. CI passes `-DBUILD_SHARED_LIBS=ON`. Vendored StormByte Base follows the same `BUILD_SHARED_LIBS` mode and is configured with `ENABLE_TEST=OFF`.
+- Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default ON). There is no `STORMBYTE_SYSTEM_SHARED` CMake option. When the library is shared, the compile definition `STORMBYTE_SYSTEM_SHARED` is still set so `visibility.h` can distinguish `dllexport` / `dllimport` / static. Vendored StormByte Base follows the same `BUILD_SHARED_LIBS` mode and is configured with `ENABLE_TEST=OFF`.
 
 ### Changed
 
+- **Breaking:** Windows `Process::Pid()` returns only the child process identifier (`DWORD`); process and thread handles remain private to the `Process` owner.
 - **Breaking:** Process no longer throws. Spawn, wait and stdin failures are `StormByte::System::Process::Error` in domain `StormByte.System.Process`, held as `Fault()`.
     - `operator bool` is true only while a child is live (`RUNNING` or `SUSPENDED`).
     - Timed `Wait` sets `TimedOut` and leaves the child running. A second wait after a successful reap sets `AlreadyExited`.
@@ -55,7 +56,24 @@ If you landed here from a release link and have not read the tree:
 - **Breaking:** `Host::PageSize`, `PhysicalMemory` and `AvailableMemory` return `ByteSize`. They are octet lengths.
 - **Breaking:** `Device::Window` is `ByteSize`. `Device::Throughput` stores octets per second as `ByteSize`, not `std::size_t`.
 - **Breaking:** `Process::operator>>` and `Stderr` take `StormByte::Safe::String`, not `std::string`. The captured text is owned by Base. `operator<<(std::ostream&, const Process&)` is `STORMBYTE_FORCE_INLINE`, so the stream buffer grows in the caller. `operator<<` on `Process` and `Pipe` accepts `std::string_view` and `String`. `operator>>` stays `String` only: a view cannot own the bytes that were read.
-- **Process path.** Both constructors copy `std::filesystem::path` inside the DLL. The rvalue overload no longer moves the caller buffer into `m_program`.
+- **Process path.** Both constructors copy UTF-8 text into module-owned native path and argument storage; `std::filesystem::path` remains behind the private implementation.
+- Process owns its private implementation through `StormByte::Safe::Unique`, allocated and freed on Base's heap.
+
+### Fixed
+
+- **Process lifecycle and errors**
+    - Construction and forwarding-thread exceptions are contained; startup failures after private state exists, plus native wait/suspend/resume failures, are reported through the Process error domain.
+    - Interrupted POSIX timed waits retry `EINTR` while continuing to enforce the requested deadline.
+    - The forwarding-thread owner is allocated before the thread starts, and the POSIX argument vector is prepared before `fork`, preventing standard-library exceptions from escaping `noexcept` construction or reaching the forked child.
+    - Moving a failed or moved-from Process no longer carries a stale initialization error.
+- **Filesystem and device errors**
+    - Directory and File operations retain permission and missing-path causes in their own error domains and contain filesystem exceptions in `LastError()` results.
+    - A denied symlink target is reported as `Permission`, not `BrokenSymlink`; broken targets remain distinguishable on POSIX and Windows.
+    - File temporary creation maps missing and inaccessible temporary directories to the corresponding File errors.
+- **Public value and resource contracts**
+    - Device `Access`, `Throughput` and `Window` are registered as `MaybeSafe` values for Base safe collections.
+    - The `Device(filesystem::path)` adapter converts a native view in the caller module; probing contains conversion failures as `ProbeFailed`.
+    - Windows thread-name buffers are released through an owner even if conversion fails.
 
 ### Removed
 

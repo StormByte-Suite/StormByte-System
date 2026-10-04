@@ -45,6 +45,7 @@
 #include <StormByte/byte_size.hxx>
 #include <StormByte/safe/string.hxx>
 #include <StormByte/system/visibility.h>
+#include <StormByte/type_traits/safe.hxx>
 
 #include <cstdint>
 #include <filesystem>
@@ -186,10 +187,15 @@ namespace StormByte::System {
 			explicit Device(std::wstring_view path) noexcept;
 
 			/**
-			 * @brief Store a filesystem path as UTF-8 text.
-			 * @param path Caller path. Need not exist.
+			 * @brief Store a filesystem path using its native path view.
+			 * @param path Caller path. Need not exist; its text is copied before return.
 			 */
-			explicit Device(const std::filesystem::path& path) noexcept;
+			explicit Device(const std::filesystem::path& path) noexcept:
+#ifdef WINDOWS
+				Device(std::wstring_view(path.native())) {}
+#else
+				Device(std::string_view(path.native())) {}
+#endif
 
 			/**
 			 * @brief Copy constructor.
@@ -280,8 +286,13 @@ namespace StormByte::System {
 
 		private:
 			StormByte::Safe::String m_path;	///< Accessor supplied by the caller
+			bool m_initialization_failed{false};	///< Whether storing the accessor failed
 	};
 }
+
+STORMBYTE_DECLARE_MAYBE_SAFE(class StormByte::System::Device::Access);
+STORMBYTE_DECLARE_MAYBE_SAFE(struct StormByte::System::Device::Throughput);
+STORMBYTE_DECLARE_MAYBE_SAFE(struct StormByte::System::Device::Window);
 
 /**
  * @brief Domain for @ref StormByte::System::Device::Error.

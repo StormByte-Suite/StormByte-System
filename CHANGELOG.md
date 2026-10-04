@@ -64,6 +64,7 @@ If you landed here from a release link and have not read the tree:
 - **Process lifecycle and errors**
     - Construction and forwarding-thread exceptions are contained; startup failures after private state exists, plus native wait/suspend/resume failures, are reported through the Process error domain.
     - Interrupted POSIX timed waits retry `EINTR` while continuing to enforce the requested deadline.
+    - The Windows suspend/resume regression uses an explicit stdin barrier and exit status.
     - The forwarding-thread owner is allocated before the thread starts, and the POSIX argument vector is prepared before `fork`, preventing standard-library exceptions from escaping `noexcept` construction or reaching the forked child.
     - Moving a failed or moved-from Process no longer carries a stale initialization error.
 - **Filesystem and device errors**

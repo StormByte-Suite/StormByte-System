@@ -619,10 +619,14 @@ int test_exit_code_windows() {
 
 int test_suspend_resume_windows() {
 	const std::string fn = "test_suspend_resume_windows";
-	Process proc("cmd.exe", Args({"/d", "/c", "timeout /t 2 /nobreak >NUL"}));
+	Process proc("cmd.exe", Args({"/d", "/c", "set /p value= && exit /b 0"}));
 	proc.Suspend();
 	ASSERT_TRUE(fn, static_cast<bool>(proc));
+	ASSERT_FALSE(fn, static_cast<bool>(proc.Fault()));
 	proc.Resume();
+	ASSERT_FALSE(fn, static_cast<bool>(proc.Fault()));
+	proc << "resumed\r\n";
+	proc << StormByte::System::EoF;
 	ASSERT_EQUAL(fn, 0u, proc.Wait());
 	RETURN_TEST(fn, 0);
 }

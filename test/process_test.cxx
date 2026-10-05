@@ -410,10 +410,17 @@ int test_stdin_roundtrip() {
 	Process proc("cat");
 	proc << "line-one\n";
 	proc << "line-two\n";
+	const char binary[] = {'b', 'i', 'n', '\0', 'a', 'r', 'y'};
+	const String owned(std::string_view(binary, sizeof(binary)));
+	proc << owned;
+	proc << std::string_view(binary, sizeof(binary));
 	proc << StormByte::System::EoF;
 	String output;
 	proc >> output;
-	ASSERT_EQUAL(fn, "line-one\nline-two\n", output);
+	std::string expected = "line-one\nline-two\n";
+	expected.append(binary, sizeof(binary));
+	expected.append(binary, sizeof(binary));
+	ASSERT_EQUAL(fn, expected, std::string(output));
 	ASSERT_EQUAL(fn, 0, proc.Wait());
 	RETURN_TEST(fn, 0);
 }
@@ -687,6 +694,27 @@ int test_windows_long_environment_expansion() {
 	RETURN_TEST(fn, 0);
 }
 
+int test_windows_bounded_environment_expansion() {
+	const std::string fn = "test_windows_bounded_environment_expansion";
+	const char* previous = std::getenv("STORMBYTE_BOUNDED_ENV");
+	const std::string saved = previous ? previous : "";
+	ASSERT_EQUAL(fn, 0, _putenv_s("STORMBYTE_BOUNDED_ENV", "expanded"));
+	const std::wstring backing = L"%STORMBYTE_BOUNDED_ENV%ignored";
+	const std::wstring_view bounded(backing.data(), backing.find(L'%', 1) + 1);
+	const String from_view = StormByte::System::Variable::Expand(bounded);
+	const StormByte::Safe::WString owned(bounded);
+	const String from_owned = StormByte::System::Variable::Expand(owned);
+	const String narrow("%STORMBYTE_BOUNDED_ENV%");
+	const String from_narrow = StormByte::System::Variable::Expand(narrow);
+	const String empty = StormByte::System::Variable::Expand(std::wstring_view{});
+	ASSERT_EQUAL(fn, 0, _putenv_s("STORMBYTE_BOUNDED_ENV", saved.c_str()));
+	ASSERT_EQUAL(fn, "expanded", std::string(from_view));
+	ASSERT_EQUAL(fn, "expanded", std::string(from_owned));
+	ASSERT_EQUAL(fn, "expanded", std::string(from_narrow));
+	ASSERT_TRUE(fn, empty.empty());
+	RETURN_TEST(fn, 0);
+}
+
 #endif
 
 int main() {
@@ -796,6 +824,7 @@ int main() {
 	// Variable
 	// -------------------
 	result += test_windows_long_environment_expansion();
+	result += test_windows_bounded_environment_expansion();
 #endif
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

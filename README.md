@@ -246,7 +246,7 @@ A failed Windows expand returns the original text (same idea as a missing UNIX `
 - Windows stdio handles are made non-inheritable after `CreateProcessW`; a short inheritance window exists during creation.
 - `Device` stores only the caller accessor. Kind/Access/Throughput/Window are valid only when the Device converts to `true`.
 - `Directory` / `File` / `Host` / `ThisThread` `LastError()` is `thread_local` inside this module, exposed by an exported getter. Do not put `thread_local` in a public header.
-- Public text across a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::CString`.
+- Public owned text across a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::WString`. Borrowed views carry explicit lengths; System copies text into module-local NUL-terminated storage when a native API needs a C string. `Process` stdin writes preserve embedded NUL bytes.
 - `Process` takes its executable path as UTF-8 text and arguments as `Safe::Vector<Safe::String>`; conversion to the native filesystem path happens inside System.
 - Destructor of `Process` waits if the child is still owned. Move invalidates the source.
 

@@ -73,8 +73,8 @@ bool ThisThread::Name(std::string_view name) {
 		return Store(ThisThread::Error::Failed);
 #ifdef WINDOWS
 	const StormByte::Safe::String utf8(name);
-	const StormByte::Safe::WString wide(utf8);
-	if (FAILED(SetThreadDescription(GetCurrentThread(), static_cast<const wchar_t*>(wide))))
+	const std::wstring wide(static_cast<std::wstring_view>(StormByte::Safe::WString(utf8)));
+	if (FAILED(SetThreadDescription(GetCurrentThread(), wide.c_str())))
 		return Store(ThisThread::Error::Failed);
 	return Store(ThisThread::Error::Success);
 #else

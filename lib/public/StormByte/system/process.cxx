@@ -282,10 +282,6 @@ Process& Process::operator<<(const StormByte::Safe::String& data) {
 	return *this << std::string_view(data);
 }
 
-Process& Process::operator<<(const StormByte::Safe::CString& data) {
-	return *this << static_cast<std::string_view>(data);
-}
-
 void Process::operator<<(const System::_EoF&) {
 	if (m_implementation && m_implementation->m_pstdin)
 		m_implementation->m_pstdin->CloseWrite();

@@ -171,8 +171,8 @@ bool File::Temporary(StormByte::Safe::String& path, std::string_view prefix, std
 			prefix_w = L"TMP";
 
 		wchar_t generated[MAX_PATH];
-		const StormByte::Safe::WString dir_w(directory);
-		if (GetTempFileNameW(static_cast<const wchar_t*>(dir_w), prefix_w.c_str(), 0, generated) == 0)
+		const std::wstring dir_w(static_cast<std::wstring_view>(StormByte::Safe::WString(directory)));
+		if (GetTempFileNameW(dir_w.c_str(), prefix_w.c_str(), 0, generated) == 0)
 			return Store(FromNativeError(GetLastError()));
 
 		std::filesystem::path result(generated);

@@ -63,6 +63,17 @@ int test_this_thread_name() {
 	RETURN_TEST(fn, 0);
 }
 
+int test_this_thread_bounded_unicode_name() {
+	const std::string fn = "test_this_thread_bounded_unicode_name";
+	const std::string backing = "sb-\xC3\xA9-ignored";
+	const String owned(std::string_view(backing.data(), 5));
+	ASSERT_TRUE(fn, StormByte::System::ThisThread::Name(static_cast<std::string_view>(owned)));
+	String name;
+	ASSERT_TRUE(fn, StormByte::System::ThisThread::Name(name));
+	ASSERT_EQUAL(fn, std::string(owned), std::string(name));
+	RETURN_TEST(fn, 0);
+}
+
 // -------------------
 // Sleep
 // -------------------
@@ -91,6 +102,7 @@ int main() {
 	// Name
 	// -------------------
 	result += test_this_thread_name();
+	result += test_this_thread_bounded_unicode_name();
 
 	// -------------------
 	// Sleep

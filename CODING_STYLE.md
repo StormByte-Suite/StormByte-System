@@ -24,7 +24,7 @@ else {
 }
 ```
 
-Pointers and references bind to the type: `const char* str`, `CString& other`, `operator const char*()`. Not `char *str`.
+Pointers and references bind to the type: `const char* str`, `String& other`, `operator const char*()`. Not `char *str`.
 
 Types, enumerations and functions are PascalCase (`Process`, `Expand`, `Wait`). Macros are `SCREAMING_SNAKE` (`STORMBYTE_SYSTEM_PUBLIC`, `WINDOWS`). One statement per line.
 
@@ -54,7 +54,7 @@ A class keeps the attribute on the type: `class STORMBYTE_SYSTEM_PUBLIC Process`
 
 Do not repeat `STORMBYTE_SYSTEM_PUBLIC` on an ordinary `.cxx` definition. Do not put `dllexport` on a member of a class that is already exported.
 
-Values that leave the shared library are `StormByte::Safe::String`, `StormByte::Safe::WString`, `StormByte::Safe::CString`, `StormByte::Safe::WCString`, `Size`, or a `const char*` owned by this library. Do not return `std::string` by value across a DLL boundary. Do not put `std::string` fields on a class another module can inherit (`Process` keeps state in a private PIMPL).
+Values that leave the shared library are `StormByte::Safe::String`, `StormByte::Safe::WString`, `Size`, or a `const char*` owned by this library. Do not return `std::string` by value across a DLL boundary. Do not put `std::string` fields on a class another module can inherit (`Process` keeps state in a private PIMPL). Treat Base text as length-aware ranges, not C strings. Materialize a local `std::string` / `std::wstring` inside System before passing text to a native API that requires NUL termination.
 
 ## Doxygen
 

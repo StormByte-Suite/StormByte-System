@@ -42,7 +42,6 @@
 
 #pragma once
 
-#include <StormByte/safe/cstring.hxx>
 #include <StormByte/safe/pointers.hxx>
 #include <StormByte/safe/vector.hxx>
 #include <StormByte/error.hxx>
@@ -259,13 +258,6 @@ namespace StormByte::System {
 			 * @return *this.
 			 */
 			Process& operator<<(const StormByte::Safe::String& str);
-
-			/**
-			 * @brief Write a CString to process stdin.
-			 * @param str Data.
-			 * @return *this.
-			 */
-			Process& operator<<(const StormByte::Safe::CString& str);
 
 			/**
 			 * @brief Close process stdin (write end).

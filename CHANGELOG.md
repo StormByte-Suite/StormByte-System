@@ -11,7 +11,7 @@ StormByte System is the C++26 process, device and host layer of the StormByte su
 
 It depends directly on [StormByte Base 2.0.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.0.0) or newer. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
 
-Spawn children with piped stdin/stdout/stderr, classify the medium behind a path, resolve directories and the current executable, inspect the machine, name the calling thread, and expand environment strings. POSIX and Windows stay behind one API. Failures are `StormByte::Error::Fault` in a per-type domain (`StormByte.System.*`). Nothing in this module throws. Text that crosses a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::CString` (and wide counterparts), not `std::string` by value.
+Spawn children with piped stdin/stdout/stderr, classify the medium behind a path, resolve directories and the current executable, inspect the machine, name the calling thread, and expand environment strings. POSIX and Windows stay behind one API. Failures are `StormByte::Error::Fault` in a per-type domain (`StormByte.System.*`). Nothing in this module throws. Text that crosses a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::WString`, not `std::string` by value.
 
 From 2.0.0, original System sources are dual-licensed: GNU Lesser General Public License v3.0 or later, or a commercial license from the copyright holder. That change does not cover other StormByte modules or third-party material under `thirdparty/` (including bundled StormByte Base).
 
@@ -49,7 +49,7 @@ If you landed here from a release link and have not read the tree:
 - **Breaking:** `Variable::Expand` returns `StormByte::Safe::String`. On Windows, a failed `ExpandEnvironmentStringsW` returns the original text (same as a missing UNIX home).
 - **Breaking:** Process constructors take a UTF-8 `StormByte::Safe::String` executable path and `StormByte::Safe::Vector<StormByte::Safe::String>` arguments. Native filesystem-path conversion stays inside System, so neither `std::filesystem::path` nor `std::vector` crosses the DLL boundary.
 - Pipe construction and I/O no longer throw. Invalid pipes convert to `false`.
-- Public text across a DLL boundary uses `StormByte::Safe::String` / `StormByte::Safe::CString`.
+- Public text across a DLL boundary uses `StormByte::Safe::String` / `StormByte::Safe::WString`; borrowed views carry explicit lengths. Native C-string copies are allocated and destroyed inside System, without relying on NUL termination in Base text buffers.
 - **Breaking:** System vendors [StormByte Base 2.0.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.0.0) directly instead of StormByte-String and exposes Base's `StormByte::Safe` owned-text types in its public API. Headers include `StormByte/safe/*.hxx` instead of `StormByte/string/*.hxx`, `StormByte/cstring.hxx` and `StormByte/wcstring.hxx`.
 - Visibility macros follow Base/Logger (`EXPORTS` / `STORMBYTE_SYSTEM_SHARED` / static empty).
 - Windows Device probe links `iphlpapi` and `ws2_32`. Host CPU name links `advapi32`. macOS Device probe links IOKit and CoreFoundation.
@@ -75,9 +75,11 @@ If you landed here from a release link and have not read the tree:
     - Device `Access`, `Throughput` and `Window` are registered as `MaybeSafe` values for Base safe collections.
     - The `Device(filesystem::path)` adapter converts a native view in the caller module; probing contains conversion failures as `ProbeFailed`.
     - Windows thread-name buffers are released through an owner even if conversion fails.
+    - Windows environment expansion, temporary-file creation and thread naming materialize module-local NUL-terminated strings before calling native APIs; bounded views do not expose trailing text or require a terminator beyond their range.
 
 ### Removed
 
+- **Breaking:** `Process` stdin and `Variable::Expand` overloads for Base's removed `CString` / `WCString` types. Use `String`, `WString` or the corresponding length-aware views.
 - **Breaking:** `StormByte/system/exception.hxx` (`Exception`, `FileIOError`, `ExecutableNotFound`, `ProcessCreationError`).
 - **Breaking:** `StormByte::System::Error` and `StormByte/system/error.hxx` (domain `StormByte.System`). Device, Process, Directory, File, Host and ThisThread keep their own domains.
 

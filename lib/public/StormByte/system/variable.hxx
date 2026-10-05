@@ -40,11 +40,9 @@
 
 #pragma once
 
-#include <StormByte/safe/cstring.hxx>
 #include <StormByte/safe/string.hxx>
 #ifdef WINDOWS
 #include <StormByte/safe/wstring.hxx>
-#include <StormByte/safe/wcstring.hxx>
 #endif
 #include <StormByte/system/visibility.h>
 
@@ -74,13 +72,6 @@ namespace StormByte::System {
 			 */
 			static StormByte::Safe::String Expand(const StormByte::Safe::String& str);
 
-			/**
-			 * @brief Expand environment variables in a CString.
-			 * @param str Input.
-			 * @return Expanded owned text.
-			 */
-			static StormByte::Safe::String Expand(const StormByte::Safe::CString& str);
-
 			#ifdef WINDOWS
 			/**
 			 * @brief Expand environment variables in wide text.
@@ -96,12 +87,6 @@ namespace StormByte::System {
 			 */
 			static StormByte::Safe::String Expand(const StormByte::Safe::WString& str);
 
-			/**
-			 * @brief Expand environment variables in a WCString.
-			 * @param str Input.
-			 * @return Expanded owned UTF-8 text.
-			 */
-			static StormByte::Safe::String Expand(const StormByte::Safe::WCString& str);
 			#endif
 
 		private:

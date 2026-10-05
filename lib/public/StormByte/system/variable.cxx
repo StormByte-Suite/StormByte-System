@@ -60,10 +60,6 @@ StormByte::Safe::String Variable::Expand(const StormByte::Safe::String& var) {
 	return ExpandEnvironmentVariable(std::string_view(var));
 }
 
-StormByte::Safe::String Variable::Expand(const StormByte::Safe::CString& var) {
-	return ExpandEnvironmentVariable(static_cast<std::string_view>(var));
-}
-
 #ifdef WINDOWS
 StormByte::Safe::String Variable::Expand(std::wstring_view var) {
 	return ExpandEnvironmentVariable(var);
@@ -73,9 +69,6 @@ StormByte::Safe::String Variable::Expand(const StormByte::Safe::WString& var) {
 	return ExpandEnvironmentVariable(std::wstring_view(var));
 }
 
-StormByte::Safe::String Variable::Expand(const StormByte::Safe::WCString& var) {
-	return ExpandEnvironmentVariable(static_cast<std::wstring_view>(var));
-}
 #endif
 
 StormByte::Safe::String Variable::ExpandEnvironmentVariable(std::string_view var) {
@@ -95,12 +88,13 @@ StormByte::Safe::String Variable::ExpandEnvironmentVariable(std::string_view var
 
 #ifdef WINDOWS
 StormByte::Safe::String Variable::ExpandEnvironmentVariable(std::wstring_view var) {
-	DWORD size = ::ExpandEnvironmentStringsW(var.data(), nullptr, 0);
+	const std::wstring terminated(var);
+	DWORD size = ::ExpandEnvironmentStringsW(terminated.c_str(), nullptr, 0);
 	if (size == 0)
 		return StormByte::Safe::String(StormByte::Safe::WString(var));
 	std::vector<wchar_t> buffer(size);
 	while (true) {
-		const DWORD result = ::ExpandEnvironmentStringsW(var.data(), buffer.data(), static_cast<DWORD>(buffer.size()));
+		const DWORD result = ::ExpandEnvironmentStringsW(terminated.c_str(), buffer.data(), static_cast<DWORD>(buffer.size()));
 		if (result == 0)
 			return StormByte::Safe::String(StormByte::Safe::WString(var));
 		if (result <= buffer.size())

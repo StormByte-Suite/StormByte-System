@@ -76,6 +76,7 @@ If you landed here from a release link and have not read the tree:
     - The `Device(filesystem::path)` adapter converts a native view in the caller module; probing contains conversion failures as `ProbeFailed`.
     - Windows thread-name buffers are released through an owner even if conversion fails.
     - Windows environment expansion, temporary-file creation and thread naming materialize module-local NUL-terminated strings before calling native APIs; bounded views do not expose trailing text or require a terminator beyond their range.
+    - The Windows bounded-environment regression uses `_dupenv_s` with module-local RAII cleanup to preserve the previous value without deprecated CRT calls or suppressing warnings.
 
 ### Removed
 

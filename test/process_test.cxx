@@ -60,6 +60,8 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#elifdef WINDOWS
+#include <memory>
 #endif
 
 using StormByte::Safe::String;
@@ -696,8 +698,11 @@ int test_windows_long_environment_expansion() {
 
 int test_windows_bounded_environment_expansion() {
 	const std::string fn = "test_windows_bounded_environment_expansion";
-	const char* previous = std::getenv("STORMBYTE_BOUNDED_ENV");
-	const std::string saved = previous ? previous : "";
+	char* previous = nullptr;
+	std::size_t previous_size = 0;
+	ASSERT_EQUAL(fn, 0, _dupenv_s(&previous, &previous_size, "STORMBYTE_BOUNDED_ENV"));
+	const std::unique_ptr<char, decltype(&std::free)> previous_owner(previous, &std::free);
+	const std::string saved = previous_owner ? previous_owner.get() : "";
 	ASSERT_EQUAL(fn, 0, _putenv_s("STORMBYTE_BOUNDED_ENV", "expanded"));
 	const std::wstring backing = L"%STORMBYTE_BOUNDED_ENV%ignored";
 	const std::wstring_view bounded(backing.data(), backing.find(L'%', 1) + 1);

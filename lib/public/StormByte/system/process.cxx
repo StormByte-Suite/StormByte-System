@@ -75,7 +75,7 @@ namespace {
 	std::vector<std::string> NarrowArgs(const StormByte::Safe::Vector<StormByte::Safe::String>& args) {
 		std::vector<std::string> out;
 		out.reserve(args.size());
-		for (const StormByte::Safe::String arg : args)
+		for (const StormByte::Safe::String& arg : args)
 			out.emplace_back(std::string(std::string_view(arg)));
 		return out;
 	}
@@ -107,19 +107,9 @@ namespace {
 #endif
 }
 
-Process::Process(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) noexcept {
-	try {
-		m_implementation = StormByte::Safe::Heap::MakeUnique<ProcessImplementation>();
-		Initialize(prog, args);
-	} catch (...) {
-		if (m_implementation)
-			Fail(*m_implementation, Process::Error::CreationFailed);
-	}
-}
-
 Process::Process(const std::string_view prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args) noexcept {
 	try {
-		m_implementation = StormByte::Safe::Heap::MakeUnique<ProcessImplementation>();
+		m_implementation = StormByte::Safe::MakeUnique<ProcessImplementation>();
 		const StormByte::Safe::String owned_program(prog);
 		Initialize(owned_program, args);
 	} catch (...) {
@@ -276,10 +266,6 @@ StormByte::Safe::String& Process::Stderr(StormByte::Safe::String& str) const {
 Process& Process::operator<<(std::string_view data) {
 	Send(data);
 	return *this;
-}
-
-Process& Process::operator<<(const StormByte::Safe::String& data) {
-	return *this << std::string_view(data);
 }
 
 void Process::operator<<(const System::_EoF&) {

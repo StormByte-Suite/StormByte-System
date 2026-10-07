@@ -115,6 +115,11 @@ Pipe::Pipe(Pipe&& pipe) noexcept:
 #endif
 }
 
+Pipe::~Pipe() noexcept {
+	CloseRead();
+	CloseWrite();
+}
+
 Pipe& Pipe::operator=(Pipe&& pipe) noexcept {
 	if (this == &pipe)
 		return *this;
@@ -130,11 +135,6 @@ Pipe& Pipe::operator=(Pipe&& pipe) noexcept {
 	pipe.m_fd[1] = -1;
 #endif
 	return *this;
-}
-
-Pipe::~Pipe() noexcept {
-	CloseRead();
-	CloseWrite();
 }
 
 Pipe::operator bool() const noexcept {
@@ -171,7 +171,7 @@ bool Pipe::WriteEOF() const {
 	return !((poll_data.revents & POLLOUT) == POLLOUT) || ((poll_data.revents & POLLERR) == POLLERR);
 }
 
-ssize_t Pipe::Read(StormByte::BinaryData& buffer, ssize_t bytes) const {
+ssize_t Pipe::Read(StormByte::Safe::Binary& buffer, ssize_t bytes) const {
 	return read(m_fd[0], buffer.data(), static_cast<size_t>(bytes));
 }
 
@@ -212,7 +212,7 @@ DWORD Pipe::Write(std::string_view data) {
 	return dwWritten;
 }
 
-DWORD Pipe::Read(StormByte::BinaryData& buffer, DWORD size) const {
+DWORD Pipe::Read(StormByte::Safe::Binary& buffer, DWORD size) const {
 	DWORD dwRead = 0;
 	SetLastError(ERROR_SUCCESS);
 	ReadFile(m_fd[0], buffer.data(), size, &dwRead, NULL);
@@ -321,7 +321,7 @@ std::unique_ptr<std::thread> Pipe::Connect(std::shared_ptr<Pipe> source, std::sh
 		bool forwarding = true;
 		try {
 #ifdef UNIX
-			StormByte::BinaryData buffer;
+			StormByte::Safe::Binary buffer;
 			buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
 			ssize_t bytes_read;
 			while (forwarding) {
@@ -336,7 +336,7 @@ std::unique_ptr<std::thread> Pipe::Connect(std::shared_ptr<Pipe> source, std::sh
 					forwarding = false;
 			}
 #else
-			StormByte::BinaryData buffer;
+			StormByte::Safe::Binary buffer;
 			buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
 			DWORD bytes_read;
 			while (forwarding) {
@@ -370,7 +370,7 @@ StormByte::Safe::String& Pipe::operator>>(StormByte::Safe::String& out) const {
 	#else
 	DWORD bytes;
 	#endif
-	StormByte::BinaryData buffer;
+	StormByte::Safe::Binary buffer;
 	std::string raw;
 	buffer.resize(StormByte::ByteSize{ MAX_READ_BYTES });
 	while (true) {

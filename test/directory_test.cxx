@@ -45,13 +45,18 @@
 #include <string>
 
 using StormByte::Safe::String;
+using StormByte::System::Directory::Current;
+using StormByte::System::Directory::CurrentExecutable;
+using StormByte::System::Directory::Home;
+using StormByte::System::Directory::LastError;
+using StormByte::System::Directory::Temporary;
 
 namespace {
 	void Dump(const char* label, const bool ok, const String& path) {
 		std::cout << label
 			<< " ok=" << (ok ? "true" : "false")
 			<< " value=" << std::string(path)
-			<< " fault=" << StormByte::System::Directory::LastError().what()
+			<< " fault=" << LastError().what()
 			<< '\n';
 	}
 }
@@ -59,41 +64,56 @@ namespace {
 // -------------------
 // Current
 // -------------------
-int test_directory_current() {
-	const std::string fn = "test_directory_current";
+int test_current() {
 	String path;
-	Dump("current", StormByte::System::Directory::Current(path), path);
-	RETURN_TEST(fn, 0);
+	const bool ok = Current(path);
+	Dump("current", ok, path);
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::Directory::Error::Success), LastError().code());
+	ASSERT_EQUAL(StormByte::System::directory_category(), LastError().code().category());
+	ASSERT_NOT_EMPTY(path);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // CurrentExecutable
 // -------------------
-int test_directory_current_executable() {
-	const std::string fn = "test_directory_current_executable";
+int test_current_executable() {
 	String path;
-	Dump("current_executable", StormByte::System::Directory::CurrentExecutable(path), path);
-	RETURN_TEST(fn, 0);
+	const bool ok = CurrentExecutable(path);
+	Dump("current_executable", ok, path);
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_EQUAL(StormByte::System::directory_category(), LastError().code().category());
+	ASSERT_NOT_EMPTY(path);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Home
 // -------------------
-int test_directory_home() {
-	const std::string fn = "test_directory_home";
+int test_home() {
 	String path;
-	Dump("home", StormByte::System::Directory::Home(path), path);
-	RETURN_TEST(fn, 0);
+	const bool ok = Home(path);
+	Dump("home", ok, path);
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_NOT_EMPTY(path);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Temporary
 // -------------------
-int test_directory_temporary() {
-	const std::string fn = "test_directory_temporary";
+int test_temporary() {
 	String path;
-	Dump("temporary", StormByte::System::Directory::Temporary(path), path);
-	RETURN_TEST(fn, 0);
+	const bool ok = Temporary(path);
+	Dump("temporary", ok, path);
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_NOT_EMPTY(path);
+	RETURN_TEST(0);
 }
 
 int main() {
@@ -102,22 +122,22 @@ int main() {
 	// -------------------
 	// Current
 	// -------------------
-	result += test_directory_current();
+	result += test_current();
 
 	// -------------------
 	// CurrentExecutable
 	// -------------------
-	result += test_directory_current_executable();
+	result += test_current_executable();
 
 	// -------------------
 	// Home
 	// -------------------
-	result += test_directory_home();
+	result += test_home();
 
 	// -------------------
 	// Temporary
 	// -------------------
-	result += test_directory_temporary();
+	result += test_temporary();
 
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

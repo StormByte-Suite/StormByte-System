@@ -38,9 +38,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
+#include <StormByte/safe/string.hxx>
 #include <StormByte/system/device.hxx>
 #include <StormByte/test_handlers.h>
+#include <StormByte/type_traits/safe.hxx>
 
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -90,79 +93,132 @@ namespace {
 			<< " window_write=" << static_cast<std::uint64_t>(window.write)
 			<< '\n';
 	}
-}
 
-// -------------------
-// Root
-// -------------------
-int test_device_root() {
-	const std::string fn = "test_device_root";
+	std::filesystem::path RootPath() {
 #ifdef WINDOWS
-	Device device(std::filesystem::path("C:\\"));
+		return std::filesystem::path("C:\\");
 #else
-	Device device(std::filesystem::path("/"));
+		return std::filesystem::path("/");
 #endif
-	Dump("root", device);
-	Device copied(device);
-	Dump("root.copy", copied);
-	RETURN_TEST(fn, 0);
+	}
 }
 
 // -------------------
-// Temp
+// Errors
 // -------------------
-int test_device_temp() {
-	const std::string fn = "test_device_temp";
-	Device device(std::filesystem::temp_directory_path());
-	Dump("temp", device);
-	RETURN_TEST(fn, 0);
-}
-
-int test_device_not_found() {
-	const std::string fn = "test_device_not_found";
-	const auto path = std::filesystem::current_path().root_path() / "StormByte-System-no-such-device-2.0.0";
-	Device device(path);
-	ASSERT_FALSE(fn, static_cast<bool>(device));
-	ASSERT_TRUE(fn, device.Fault().code() == StormByte::System::make_error_code(Device::Error::DeviceNotFound));
-	RETURN_TEST(fn, 0);
-}
-
-#ifdef UNIX
-int test_device_broken_symlink() {
-	const std::string fn = "test_device_broken_symlink";
+int test_broken_symlink() {
+#ifndef UNIX
+	RETURN_TEST(0);
+#else
 	const auto name = "StormByte-System-broken-link-" + std::to_string(
 		std::chrono::steady_clock::now().time_since_epoch().count());
 	const auto link = std::filesystem::temp_directory_path() / name;
 	const auto target = link.string() + "-missing-target";
 	std::error_code error;
 	std::filesystem::create_symlink(target, link, error);
-	ASSERT_FALSE(fn, static_cast<bool>(error));
+	ASSERT_FALSE(static_cast<bool>(error));
 	Device device(link);
 	const bool correctly_classified = device.Fault().code() ==
 		StormByte::System::make_error_code(Device::Error::BrokenSymlink);
+	ASSERT_FALSE(static_cast<bool>(device));
 	std::filesystem::remove(link, error);
-	ASSERT_FALSE(fn, static_cast<bool>(error));
-	ASSERT_TRUE(fn, correctly_classified);
-	RETURN_TEST(fn, 0);
-}
+	ASSERT_FALSE(static_cast<bool>(error));
+	ASSERT_TRUE(correctly_classified);
+	RETURN_TEST(0);
 #endif
+}
+
+int test_not_found() {
+	const auto path = std::filesystem::current_path().root_path() / "StormByte-System-no-such-device-2.0.0";
+	Device device(path);
+	ASSERT_FALSE(static_cast<bool>(device));
+	ASSERT_EQUAL(StormByte::System::make_error_code(Device::Error::DeviceNotFound), device.Fault().code());
+	ASSERT_EQUAL(StormByte::System::device_category(), device.Fault().code().category());
+	RETURN_TEST(0);
+}
+
+// -------------------
+// Lifecycle
+// -------------------
+int test_copy_move_and_path() {
+	const StormByte::Safe::String owned{std::string_view{RootPath().string()}};
+	Device from_owned(owned);
+	Device from_view(std::string_view{RootPath().string()});
+	Device from_path(RootPath());
+	ASSERT_EQUAL(std::string(from_owned.Path()), std::string(from_view.Path()));
+	ASSERT_EQUAL(std::string(from_owned.Path()), std::string(from_path.Path()));
+	Device copied(from_path);
+	ASSERT_EQUAL(std::string(from_path.Path()), std::string(copied.Path()));
+	Device moved(std::move(copied));
+	ASSERT_EQUAL(std::string(from_path.Path()), std::string(moved.Path()));
+	Device assigned(std::string_view{"unused"});
+	assigned = from_path;
+	ASSERT_EQUAL(std::string(from_path.Path()), std::string(assigned.Path()));
+	Device move_assigned(std::string_view{"unused"});
+	move_assigned = std::move(moved);
+	ASSERT_EQUAL(std::string(from_path.Path()), std::string(move_assigned.Path()));
+	RETURN_TEST(0);
+}
+
+// -------------------
+// Probe
+// -------------------
+int test_root() {
+	Device device(RootPath());
+	Dump("root", device);
+	ASSERT_TRUE(static_cast<bool>(device));
+	ASSERT_FALSE(static_cast<bool>(device.Fault()));
+	ASSERT_TRUE(device.Access().Has(Device::AccessFlag::Readable));
+	const auto rate = device.Throughput();
+	const auto window = device.Window();
+	const StormByte::ByteSize floor{16ull * 1024ull};
+	const StormByte::ByteSize ceiling{1024ull * 1024ull};
+	ASSERT_TRUE(window.read >= floor);
+	ASSERT_TRUE(window.read <= ceiling);
+	ASSERT_TRUE(window.write >= floor);
+	ASSERT_TRUE(window.write <= ceiling);
+	ASSERT_TRUE(rate.read_bps > StormByte::ByteSize{0});
+	ASSERT_TRUE(rate.write_bps > StormByte::ByteSize{0});
+	RETURN_TEST(0);
+}
+
+int test_temp() {
+	Device device(std::filesystem::temp_directory_path());
+	Dump("temp", device);
+	ASSERT_TRUE(static_cast<bool>(device));
+	ASSERT_TRUE(device.Access().Has(Device::AccessFlag::Readable));
+	const auto rate = device.Throughput();
+	const auto window = device.Window();
+	const StormByte::ByteSize floor{16ull * 1024ull};
+	const StormByte::ByteSize ceiling{1024ull * 1024ull};
+	ASSERT_TRUE(window.read >= floor);
+	ASSERT_TRUE(window.read <= ceiling);
+	ASSERT_TRUE(window.write >= floor);
+	ASSERT_TRUE(window.write <= ceiling);
+	ASSERT_TRUE(rate.read_bps > StormByte::ByteSize{0});
+	ASSERT_TRUE(rate.write_bps > StormByte::ByteSize{0});
+	RETURN_TEST(0);
+}
 
 int main() {
 	int result = 0;
 
 	// -------------------
-	// Root
+	// Errors
 	// -------------------
-	result += test_device_root();
+	result += test_broken_symlink();
+	result += test_not_found();
 
 	// -------------------
-	// Temp
+	// Lifecycle
 	// -------------------
-	result += test_device_temp();
-	result += test_device_not_found();
-#ifdef UNIX
-	result += test_device_broken_symlink();
-#endif
+	result += test_copy_move_and_path();
+
+	// -------------------
+	// Probe
+	// -------------------
+	result += test_root();
+	result += test_temp();
 
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

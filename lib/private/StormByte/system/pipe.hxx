@@ -40,7 +40,7 @@
 
 #pragma once
 
-#include <StormByte/binary_data.hxx>
+#include <StormByte/safe/binary.hxx>
 #include <StormByte/safe/string.hxx>
 #include <StormByte/system/visibility.h>
 
@@ -78,24 +78,33 @@ namespace StormByte::System {
 			 */
 			Pipe() noexcept;
 
+			/**
+			 * @brief Copying a pipe is not possible.
+			 */
 			Pipe(const Pipe&) = delete;
 
 			/**
 			 * @brief Move constructor.
+			 * @param pipe Source. Left closed.
 			 */
 			Pipe(Pipe&& pipe) noexcept;
-
-			Pipe& operator=(const Pipe&) = delete;
-
-			/**
-			 * @brief Move assignment.
-			 */
-			Pipe& operator=(Pipe&& pipe) noexcept;
 
 			/**
 			 * @brief Close both ends.
 			 */
 			~Pipe() noexcept;
+
+			/**
+			 * @brief Copying a pipe is not possible.
+			 */
+			Pipe& operator=(const Pipe&) = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param pipe Source. Left closed.
+			 * @return This pipe.
+			 */
+			Pipe& operator=(Pipe&& pipe) noexcept;
 
 			/**
 			 * @brief Whether both ends are open.
@@ -107,12 +116,14 @@ namespace StormByte::System {
 			/**
 			 * @brief Dup2 read end onto @p fd.
 			 * @param fd Destination file descriptor.
+			 * @return false if dup2 failed.
 			 */
 			bool BindRead(int fd) noexcept;
 
 			/**
 			 * @brief Dup2 write end onto @p fd.
 			 * @param fd Destination file descriptor.
+			 * @return false if dup2 failed.
 			 */
 			bool BindWrite(int fd) noexcept;
 
@@ -135,7 +146,7 @@ namespace StormByte::System {
 			 * @param size Max bytes.
 			 * @return Bytes read.
 			 */
-			ssize_t Read(StormByte::BinaryData& buffer, ssize_t size) const;
+			ssize_t Read(StormByte::Safe::Binary& buffer, ssize_t size) const;
 
 			/**
 			 * @brief Whether the read end reports HUP/ERR.
@@ -182,12 +193,13 @@ namespace StormByte::System {
 			 * @param size Max bytes.
 			 * @return Bytes read.
 			 */
-			DWORD Read(StormByte::BinaryData& buffer, DWORD size) const;
+			DWORD Read(StormByte::Safe::Binary& buffer, DWORD size) const;
 			#endif
 
 			/**
 			 * @brief Write @p str in chunks until complete or peer closes.
 			 * @param str Data. Empty view succeeds immediately.
+			 * @param cancelled Optional cancellation flag.
 			 * @return true if all data was written.
 			 */
 			bool WriteAtomic(std::string_view str, const std::shared_ptr<std::atomic_bool>& cancelled = {});
@@ -195,6 +207,7 @@ namespace StormByte::System {
 			/**
 			 * @brief Write @p str in chunks until complete or peer closes.
 			 * @param str Data (moved). Empty text succeeds immediately.
+			 * @param cancelled Optional cancellation flag.
 			 * @return true if all data was written.
 			 */
 			bool WriteAtomic(StormByte::Safe::String&& str, const std::shared_ptr<std::atomic_bool>& cancelled = {});
@@ -262,6 +275,7 @@ namespace StormByte::System {
 			 * @brief Dup2 and close source.
 			 * @param src Source fd (set to -1).
 			 * @param dst Destination fd.
+			 * @return false if dup2 failed.
 			 */
 			bool Bind(int& src, int dst) noexcept;
 

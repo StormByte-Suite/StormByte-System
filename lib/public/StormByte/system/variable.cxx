@@ -56,17 +56,9 @@ StormByte::Safe::String Variable::Expand(std::string_view var) {
 	return ExpandEnvironmentVariable(var);
 }
 
-StormByte::Safe::String Variable::Expand(const StormByte::Safe::String& var) {
-	return ExpandEnvironmentVariable(std::string_view(var));
-}
-
 #ifdef WINDOWS
 StormByte::Safe::String Variable::Expand(std::wstring_view var) {
 	return ExpandEnvironmentVariable(var);
-}
-
-StormByte::Safe::String Variable::Expand(const StormByte::Safe::WString& var) {
-	return ExpandEnvironmentVariable(std::wstring_view(var));
 }
 
 #endif

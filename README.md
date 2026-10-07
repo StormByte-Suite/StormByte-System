@@ -58,8 +58,8 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 |------|--------------------|
 | **One process API** | `Process` starts on construct; pipes are private. Errors are `Fault()`, not exceptions. |
 | **Shell-like chaining** | `p1 >> p2` forwards stdout to stdin on a worker thread. |
-| **stdin control** | `<<` writes; `<< System::EoF` closes the write end. |
-| **Medium behind a path** | `Device` probes Kind, Access, Throughput and Window on demand. |
+| **stdin control** | `<<` writes a `string_view`; `<< System::EoF` closes the write end. |
+| **Medium behind a path** | `Device` probes Kind, Access, nominal Throughput and a suggested Window on demand. |
 | **This process on disk** | `Directory` and `File` resolve cwd, home, temp and the running image. |
 | **This machine** | `Host` reports name, OS, kernel, CPU, ISA, RAM and bitness. |
 | **This thread** | `ThisThread::Sleep` and `Name` (reject, do not truncate, if too long). |
@@ -101,13 +101,13 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Name | Role |
 |------|------|
-| `Process` | Spawn and talk to a child. `operator bool` is true only while the child is live. `Pid()` exposes only its scalar process ID; native process/thread handles stay private to the owner. `Fault()` is `StormByte.System.Process`. |
-| `Device` | Medium behind a path. `operator bool` is probe success, not permission. `Fault()` is `StormByte.System.Device`. `Throughput` / `Window` are virtual. |
+| `Process` | Spawn and talk to a child. One public constructor: `string_view` plus `Safe::Vector<Safe::String>`. A literal binds; a `Safe::String` binds through its view conversion. `operator bool` is true only while the child is live. `Pid()` exposes only its scalar process ID; native process/thread handles stay private to the owner. `Fault()` is `StormByte.System.Process`. |
+| `Device` | Medium behind a path. `operator bool` is probe success, not permission. `Fault()` is `StormByte.System.Device`. `Throughput` is a nominal rate. `Window` is a suggested transfer size. Both are `ByteSize`. |
 | `Directory` | `Current`, `Home`, `Temporary`, `CurrentExecutable`. `bool` + out `String`. `LastError()` is TLS in this module. |
 | `File` | `Temporary(prefix, suffix)` (caller unlinks) and `CurrentExecutable`. Same `bool` + `LastError` contract. |
-| `Host` | `Name`, `Architecture`, `CPU`, `OS`, `Kernel`, `PageSize`, `PhysicalMemory`, `AvailableMemory`, `LogicalProcessors`, `Bitness`. |
+| `Host` | `Name`, `Architecture`, `CPU`, `OS`, `Kernel`, `PageSize`, `PhysicalMemory`, `AvailableMemory`, `LogicalProcessors`, `Bitness`. Sizes are `ByteSize`. |
 | `ThisThread` | `Sleep`; `Name` get/set. Set returns `false` and `TooLong` if the platform limit is exceeded. |
-| `Variable` | Expand environment strings to `StormByte::Safe::String`. |
+| `Variable` | Expand environment strings. One public entry per width (`string_view`, `wstring_view`). The result is `StormByte::Safe::String`. |
 | `System::EoF` | Close process stdin. |
 
 `Pipe` is private. There is no `StormByte/system/exception.hxx` and no generic `StormByte.System` error domain.
@@ -121,13 +121,15 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 using StormByte::System::Process;
 
-Process missing(StormByte::Safe::String("/no/such/stormbyte-tool"));
+Process missing("/no/such/stormbyte-tool");
 if (!missing) {
 	if (missing.Fault().code() == make_error_code(Process::Error::ExecutableNotFound))
 		/* spawn failed */;
 }
 
-Process echo("echo", {StormByte::Safe::String("hello")});
+StormByte::Safe::Vector<StormByte::Safe::String> args;
+args.emplace_back("hello");
+Process echo("echo", args);
 if (!echo)
 	return;
 StormByte::Safe::String out;
@@ -143,8 +145,14 @@ On Windows use a real binary (`cmd.exe`, `where.exe`) instead of `echo` if it is
 ### Pipe two processes
 
 ```cpp
-Process producer("printf", {StormByte::Safe::String("%s"), StormByte::Safe::String("hello\n")});
-Process consumer("tr", {StormByte::Safe::String("a-z"), StormByte::Safe::String("A-Z")});
+StormByte::Safe::Vector<StormByte::Safe::String> producer_args;
+producer_args.emplace_back("%s");
+producer_args.emplace_back("hello\n");
+Process producer("printf", producer_args);
+StormByte::Safe::Vector<StormByte::Safe::String> consumer_args;
+consumer_args.emplace_back("a-z");
+consumer_args.emplace_back("A-Z");
+Process consumer("tr", consumer_args);
 producer >> consumer;
 producer << StormByte::System::EoF;
 StormByte::Safe::String out;
@@ -158,7 +166,9 @@ consumer.Wait();
 ```cpp
 #include <StormByte/system/device.hxx>
 
-StormByte::System::Device root("/");
+#include <filesystem>
+
+StormByte::System::Device root(std::filesystem::path("/"));
 if (!root) {
 	/* BrokenSymlink, DeviceNotFound, Permission, ProbeFailed */
 	return;
@@ -169,7 +179,7 @@ auto rate = root.Throughput();
 auto window = root.Window();
 ```
 
-On Windows pass `C:\\`. `operator bool` is not “can write”. A special device node is never writable. Symlinks are followed; a dangling link is `BrokenSymlink`.
+On Windows pass `std::filesystem::path("C:\\")`. `operator bool` is not “can write”. A special device node is never writable. Symlinks are followed; a dangling link is `BrokenSymlink`.
 
 ### Directories and files
 
@@ -207,7 +217,7 @@ auto ram = StormByte::System::Host::PhysicalMemory();
 unsigned bits = StormByte::System::Host::Bitness();
 ```
 
-`LogicalProcessors` and `Bitness` do not update `LastError`. The others do. A failed `Size` is zero; a failed `String` is empty.
+`LogicalProcessors` and `Bitness` do not update `LastError`. The others do. A failed `ByteSize` is zero; a failed `String` is empty.
 
 ### Calling thread
 
@@ -233,21 +243,21 @@ auto home = StormByte::System::Variable::Expand("~");
 auto tmp = StormByte::System::Variable::Expand("%TEMP%");
 ```
 
-A failed Windows expand returns the original text (same idea as a missing UNIX `$HOME`).
+A literal binds. A `Safe::String` binds through its view conversion. A failed Windows expand returns the original text (same idea as a missing UNIX `$HOME`).
 
 ## Design notes
 
 - `Process` construction starts the child immediately and does not throw. `operator bool` is live status only.
+- The public `Process` constructor and `operator<<` take `std::string_view`. A literal binds. A `Safe::String` binds through its view conversion. The view is copied into Base-owned text before it crosses the DLL boundary.
 - Windows process and thread handles remain inside `Process` and are closed by `Wait()` or destruction; `Pid()` returns only the child ID.
 - The private `Process` implementation uses `StormByte::Safe::Unique` and is destroyed by the System module.
 - Timed `Wait` sets `TimedOut` and leaves the child running.
 - On UNIX, System ignores `SIGPIPE` once process-wide so a closed pipe peer reports write failure instead of killing the host.
 - Windows `Suspend()` / `Resume()` snapshot the child threads; a thread created during enumeration may be missed.
 - Windows stdio handles are made non-inheritable after `CreateProcessW`; a short inheritance window exists during creation.
-- `Device` stores only the caller accessor. Kind/Access/Throughput/Window are valid only when the Device converts to `true`.
+- `Device` stores only the caller accessor. Kind/Access/Throughput/Window are valid only when the Device converts to `true`. Pass a `std::filesystem::path`: a string literal is ambiguous between `Safe::String` and `string_view`.
 - `Directory` / `File` / `Host` / `ThisThread` `LastError()` is `thread_local` inside this module, exposed by an exported getter. Do not put `thread_local` in a public header.
 - Public owned text across a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::WString`. Borrowed views carry explicit lengths; System copies text into module-local NUL-terminated storage when a native API needs a C string. `Process` stdin writes preserve embedded NUL bytes.
-- `Process` takes its executable path as UTF-8 text and arguments as `Safe::Vector<Safe::String>`; conversion to the native filesystem path happens inside System.
 - Destructor of `Process` waits if the child is still owned. Move invalidates the source.
 
 ## Testing
@@ -258,7 +268,7 @@ Enable tests in CMake (`ENABLE_TEST`) and run CTest from the build tree. Process
 
 Issues and pull requests belong on this repository. Fork and open a PR against `master`.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before you send a patch (copyright assignment and review rules). Coding rules are in [CODING_STYLE.md](CODING_STYLE.md) when that file exists.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before you send a patch (copyright assignment and review rules). Coding rules are in [CODING_STYLE.md](CODING_STYLE.md).
 
 ## License
 

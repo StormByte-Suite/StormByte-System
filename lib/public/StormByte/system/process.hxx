@@ -40,12 +40,10 @@
 
 #pragma once
 
-#pragma once
-
-#include <StormByte/safe/pointers.hxx>
-#include <StormByte/safe/vector.hxx>
 #include <StormByte/error.hxx>
+#include <StormByte/safe/pointers.hxx>
 #include <StormByte/safe/string.hxx>
+#include <StormByte/safe/vector.hxx>
 #include <StormByte/system/visibility.h>
 
 #include <chrono>
@@ -119,14 +117,7 @@ namespace StormByte::System {
 
 			/**
 			 * @brief Construct and start.
-			 * @param prog Executable path or name.
-			 * @param args Argument list (not including argv[0]).
-			 */
-			Process(const StormByte::Safe::String& prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args = {}) noexcept;
-
-			/**
-			 * @brief Construct and start from a UTF-8 path view.
-			 * @param prog Executable path or name. Copied into Base-owned text before crossing the DLL boundary.
+			 * @param prog Executable path or name. A literal, a view and a Safe::String all bind here.
 			 * @param args Argument list (not including argv[0]).
 			 */
 			Process(std::string_view prog, const StormByte::Safe::Vector<StormByte::Safe::String>& args = {}) noexcept;
@@ -247,17 +238,10 @@ namespace StormByte::System {
 
 			/**
 			 * @brief Write UTF-8 text to process stdin.
-			 * @param str Data.
+			 * @param str Data. A literal and a Safe::String bind here.
 			 * @return *this.
 			 */
 			Process& operator<<(std::string_view str);
-
-			/**
-			 * @brief Write owned UTF-8 text to process stdin.
-			 * @param str Data.
-			 * @return *this.
-			 */
-			Process& operator<<(const StormByte::Safe::String& str);
 
 			/**
 			 * @brief Close process stdin (write end).

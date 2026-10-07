@@ -55,37 +55,25 @@ namespace StormByte::System {
 	 * @brief Environment variable expansion helpers.
 	 *
 	 * Windows: ExpandEnvironmentStrings. UNIX: expand `~` to the home path.
+	 * A literal, a view and a Safe::String all bind to the view. The owned
+	 * result is built here.
 	 */
 	class STORMBYTE_SYSTEM_PUBLIC Variable {
 		public:
 			/**
 			 * @brief Expand environment variables in UTF-8 text.
-			 * @param str Input.
+			 * @param str Input. A Safe::String binds through its string_view conversion.
 			 * @return Expanded owned text.
 			 */
 			static StormByte::Safe::String Expand(std::string_view str);
 
-			/**
-			 * @brief Expand environment variables in owned UTF-8 text.
-			 * @param str Input.
-			 * @return Expanded owned text.
-			 */
-			static StormByte::Safe::String Expand(const StormByte::Safe::String& str);
-
 			#ifdef WINDOWS
 			/**
 			 * @brief Expand environment variables in wide text.
-			 * @param str Input.
+			 * @param str Input. A Safe::WString binds through its wstring_view conversion.
 			 * @return Expanded owned UTF-8 text.
 			 */
 			static StormByte::Safe::String Expand(std::wstring_view str);
-
-			/**
-			 * @brief Expand environment variables in owned wide text.
-			 * @param str Input.
-			 * @return Expanded owned UTF-8 text.
-			 */
-			static StormByte::Safe::String Expand(const StormByte::Safe::WString& str);
 
 			#endif
 

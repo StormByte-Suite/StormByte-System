@@ -46,53 +46,63 @@
 #include <string>
 
 using StormByte::Safe::String;
+using StormByte::System::ThisThread::LastError;
+using StormByte::System::ThisThread::Name;
+using StormByte::System::ThisThread::Sleep;
 
 // -------------------
 // Name
 // -------------------
-int test_this_thread_name() {
-	const std::string fn = "test_this_thread_name";
-	const bool set_ok = StormByte::System::ThisThread::Name("sb-thread");
+int test_name() {
+	const bool set_ok = Name("sb-thread");
 	std::cout << "set ok=" << (set_ok ? "true" : "false")
-		<< " fault=" << StormByte::System::ThisThread::LastError().what() << '\n';
+		<< " fault=" << LastError().what() << '\n';
+	ASSERT_TRUE(set_ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_EQUAL(StormByte::System::this_thread_category(), LastError().code().category());
 	String name;
-	const bool get_ok = StormByte::System::ThisThread::Name(name);
+	const bool get_ok = Name(name);
 	std::cout << "get ok=" << (get_ok ? "true" : "false")
 		<< " value=" << std::string(name)
-		<< " fault=" << StormByte::System::ThisThread::LastError().what() << '\n';
-	RETURN_TEST(fn, 0);
+		<< " fault=" << LastError().what() << '\n';
+	ASSERT_TRUE(get_ok);
+	ASSERT_EQUAL(std::string("sb-thread"), std::string(name));
+	RETURN_TEST(0);
 }
 
-int test_this_thread_bounded_unicode_name() {
-	const std::string fn = "test_this_thread_bounded_unicode_name";
+int test_bounded_unicode_name() {
 	const std::string backing = "sb-\xC3\xA9-ignored";
 	const String owned(std::string_view(backing.data(), 5));
-	ASSERT_TRUE(fn, StormByte::System::ThisThread::Name(static_cast<std::string_view>(owned)));
+	ASSERT_TRUE(Name(static_cast<std::string_view>(owned)));
 	String name;
-	ASSERT_TRUE(fn, StormByte::System::ThisThread::Name(name));
-	ASSERT_EQUAL(fn, std::string(owned), std::string(name));
-	RETURN_TEST(fn, 0);
+	ASSERT_TRUE(Name(name));
+	ASSERT_EQUAL(std::string(owned), std::string(name));
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Sleep
 // -------------------
-int test_this_thread_sleep() {
-	const std::string fn = "test_this_thread_sleep";
-	StormByte::System::ThisThread::Sleep(std::chrono::milliseconds(1));
+int test_sleep() {
+	Sleep(std::chrono::milliseconds(1));
 	std::cout << "sleep done\n";
-	RETURN_TEST(fn, 0);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // TooLong
 // -------------------
-int test_this_thread_too_long() {
-	const std::string fn = "test_this_thread_too_long";
-	const bool ok = StormByte::System::ThisThread::Name("this-name-is-way-too-long-for-pthread");
+int test_too_long() {
+	const bool ok = Name("this-name-is-way-too-long-for-pthread");
 	std::cout << "too_long ok=" << (ok ? "true" : "false")
-		<< " fault=" << StormByte::System::ThisThread::LastError().what() << '\n';
-	RETURN_TEST(fn, 0);
+		<< " fault=" << LastError().what() << '\n';
+#ifdef UNIX
+	ASSERT_FALSE(ok);
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::ThisThread::Error::TooLong), LastError().code());
+#else
+	ASSERT_TRUE(ok || LastError().code() == StormByte::System::make_error_code(StormByte::System::ThisThread::Error::TooLong));
+#endif
+	RETURN_TEST(0);
 }
 
 int main() {
@@ -101,18 +111,18 @@ int main() {
 	// -------------------
 	// Name
 	// -------------------
-	result += test_this_thread_name();
-	result += test_this_thread_bounded_unicode_name();
+	result += test_name();
+	result += test_bounded_unicode_name();
 
 	// -------------------
 	// Sleep
 	// -------------------
-	result += test_this_thread_sleep();
+	result += test_sleep();
 
 	// -------------------
 	// TooLong
 	// -------------------
-	result += test_this_thread_too_long();
+	result += test_too_long();
 
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

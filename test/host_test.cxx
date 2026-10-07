@@ -41,16 +41,28 @@
 #include <StormByte/system/host.hxx>
 #include <StormByte/test_handlers.h>
 
+#include <cstdint>
 #include <iostream>
 #include <string>
 
 using StormByte::Safe::String;
+using StormByte::System::Host::Architecture;
+using StormByte::System::Host::AvailableMemory;
+using StormByte::System::Host::Bitness;
+using StormByte::System::Host::CPU;
+using StormByte::System::Host::Kernel;
+using StormByte::System::Host::LastError;
+using StormByte::System::Host::LogicalProcessors;
+using StormByte::System::Host::Name;
+using StormByte::System::Host::OS;
+using StormByte::System::Host::PageSize;
+using StormByte::System::Host::PhysicalMemory;
 
 namespace {
 	void DumpText(const char* label, const String& value) {
 		std::cout << label
 			<< " value=" << std::string(value)
-			<< " fault=" << StormByte::System::Host::LastError().what()
+			<< " fault=" << LastError().what()
 			<< '\n';
 	}
 }
@@ -58,85 +70,105 @@ namespace {
 // -------------------
 // Architecture
 // -------------------
-int test_host_architecture() {
-	const std::string fn = "test_host_architecture";
-	DumpText("architecture", StormByte::System::Host::Architecture());
-	RETURN_TEST(fn, 0);
+int test_architecture() {
+	const String value = Architecture();
+	DumpText("architecture", value);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_EQUAL(StormByte::System::host_category(), LastError().code().category());
+	ASSERT_NOT_EMPTY(value);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Bitness
 // -------------------
-int test_host_bitness() {
-	const std::string fn = "test_host_bitness";
-	std::cout << "bitness=" << StormByte::System::Host::Bitness() << '\n';
-	RETURN_TEST(fn, 0);
+int test_bitness() {
+	const unsigned bits = Bitness();
+	std::cout << "bitness=" << bits << '\n';
+	ASSERT_TRUE(bits == 32 || bits == 64);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // CPU
 // -------------------
-int test_host_cpu() {
-	const std::string fn = "test_host_cpu";
-	DumpText("cpu", StormByte::System::Host::CPU());
-	RETURN_TEST(fn, 0);
+int test_cpu() {
+	const String value = CPU();
+	DumpText("cpu", value);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_NOT_EMPTY(value);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Kernel
 // -------------------
-int test_host_kernel() {
-	const std::string fn = "test_host_kernel";
-	DumpText("kernel", StormByte::System::Host::Kernel());
-	RETURN_TEST(fn, 0);
+int test_kernel() {
+	const String value = Kernel();
+	DumpText("kernel", value);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_NOT_EMPTY(value);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Memory
 // -------------------
-int test_host_memory() {
-	const std::string fn = "test_host_memory";
-	const auto page = StormByte::System::Host::PageSize();
+int test_memory() {
+	const auto page = PageSize();
 	std::cout << "page_size=" << static_cast<std::uint64_t>(page)
-		<< " fault=" << StormByte::System::Host::LastError().what() << '\n';
-	const auto physical = StormByte::System::Host::PhysicalMemory();
+		<< " fault=" << LastError().what() << '\n';
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_TRUE(page > StormByte::ByteSize{0});
+	const auto physical = PhysicalMemory();
 	std::cout << "physical_memory=" << static_cast<std::uint64_t>(physical)
-		<< " fault=" << StormByte::System::Host::LastError().what() << '\n';
-	const auto available = StormByte::System::Host::AvailableMemory();
+		<< " fault=" << LastError().what() << '\n';
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_TRUE(physical > StormByte::ByteSize{0});
+	const auto available = AvailableMemory();
 	std::cout << "available_memory=" << static_cast<std::uint64_t>(available)
-		<< " fault=" << StormByte::System::Host::LastError().what() << '\n';
-	RETURN_TEST(fn, 0);
+		<< " fault=" << LastError().what() << '\n';
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_TRUE(available > StormByte::ByteSize{0});
+	ASSERT_TRUE(available <= physical);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Name
 // -------------------
-int test_host_name() {
-	const std::string fn = "test_host_name";
+int test_name() {
 	String name;
-	const bool ok = StormByte::System::Host::Name(name);
+	const bool ok = Name(name);
 	std::cout << "name ok=" << (ok ? "true" : "false")
 		<< " value=" << std::string(name)
-		<< " fault=" << StormByte::System::Host::LastError().what() << '\n';
-	RETURN_TEST(fn, 0);
+		<< " fault=" << LastError().what() << '\n';
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::Host::Error::Success), LastError().code());
+	ASSERT_NOT_EMPTY(name);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // OS
 // -------------------
-int test_host_os() {
-	const std::string fn = "test_host_os";
-	DumpText("os", StormByte::System::Host::OS());
-	RETURN_TEST(fn, 0);
+int test_os() {
+	const String value = OS();
+	DumpText("os", value);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_NOT_EMPTY(value);
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Processors
 // -------------------
-int test_host_processors() {
-	const std::string fn = "test_host_processors";
-	std::cout << "logical_processors=" << StormByte::System::Host::LogicalProcessors() << '\n';
-	RETURN_TEST(fn, 0);
+int test_processors() {
+	const unsigned count = LogicalProcessors();
+	std::cout << "logical_processors=" << count << '\n';
+	ASSERT_TRUE(count > 0);
+	RETURN_TEST(0);
 }
 
 int main() {
@@ -145,42 +177,42 @@ int main() {
 	// -------------------
 	// Architecture
 	// -------------------
-	result += test_host_architecture();
+	result += test_architecture();
 
 	// -------------------
 	// Bitness
 	// -------------------
-	result += test_host_bitness();
+	result += test_bitness();
 
 	// -------------------
 	// CPU
 	// -------------------
-	result += test_host_cpu();
+	result += test_cpu();
 
 	// -------------------
 	// Kernel
 	// -------------------
-	result += test_host_kernel();
+	result += test_kernel();
 
 	// -------------------
 	// Memory
 	// -------------------
-	result += test_host_memory();
+	result += test_memory();
 
 	// -------------------
 	// Name
 	// -------------------
-	result += test_host_name();
+	result += test_name();
 
 	// -------------------
 	// OS
 	// -------------------
-	result += test_host_os();
+	result += test_os();
 
 	// -------------------
 	// Processors
 	// -------------------
-	result += test_host_processors();
+	result += test_processors();
 
 	if (result == 0)
 		std::cout << "All tests passed!" << std::endl;

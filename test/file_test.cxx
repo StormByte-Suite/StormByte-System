@@ -49,13 +49,16 @@
 #endif
 
 using StormByte::Safe::String;
+using StormByte::System::File::CurrentExecutable;
+using StormByte::System::File::LastError;
+using StormByte::System::File::Temporary;
 
 namespace {
 	void Dump(const char* label, const bool ok, const String& path) {
 		std::cout << label
 			<< " ok=" << (ok ? "true" : "false")
 			<< " value=" << std::string(path)
-			<< " fault=" << StormByte::System::File::LastError().what()
+			<< " fault=" << LastError().what()
 			<< '\n';
 	}
 }
@@ -63,46 +66,71 @@ namespace {
 // -------------------
 // CurrentExecutable
 // -------------------
-int test_file_current_executable() {
-	const std::string fn = "test_file_current_executable";
+int test_current_executable() {
 	String path;
-	Dump("current_executable", StormByte::System::File::CurrentExecutable(path), path);
-	RETURN_TEST(fn, 0);
+	const bool ok = CurrentExecutable(path);
+	Dump("current_executable", ok, path);
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::File::Error::Success), LastError().code());
+	ASSERT_EQUAL(StormByte::System::file_category(), LastError().code().category());
+	ASSERT_NOT_EMPTY(path);
+	ASSERT_TRUE(std::filesystem::is_regular_file(std::filesystem::path(std::string(path))));
+	RETURN_TEST(0);
 }
 
 // -------------------
 // Temporary
 // -------------------
-int test_file_temporary() {
-	const std::string fn = "test_file_temporary";
+int test_temporary() {
 	String path;
-	const bool ok = StormByte::System::File::Temporary(path, "SB", ".tmp");
+	const bool ok = Temporary(path, "SB", ".tmp");
 	Dump("temporary", ok, path);
-	ASSERT_TRUE(fn, ok);
-	const auto native_path = std::filesystem::path(std::string(path));
-	ASSERT_TRUE(fn, std::filesystem::exists(native_path));
+	ASSERT_TRUE(ok);
+	ASSERT_FALSE(static_cast<bool>(LastError()));
+	ASSERT_NOT_EMPTY(path);
+	const std::string text(path);
+	ASSERT_CONTAINS(text, "SB");
+	ASSERT_CONTAINS(text, ".tmp");
+	const auto native_path = std::filesystem::path(text);
+	ASSERT_TRUE(std::filesystem::exists(native_path));
+	ASSERT_TRUE(std::filesystem::is_regular_file(native_path));
+	ASSERT_EQUAL(static_cast<std::uintmax_t>(0), std::filesystem::file_size(native_path));
 	std::filesystem::remove(native_path);
-	ASSERT_FALSE(fn, std::filesystem::exists(native_path));
-	RETURN_TEST(fn, 0);
+	ASSERT_FALSE(std::filesystem::exists(native_path));
+	RETURN_TEST(0);
+}
+
+int test_temporary_default_prefix() {
+	String path;
+	const bool ok = Temporary(path);
+	Dump("temporary_default", ok, path);
+	ASSERT_TRUE(ok);
+	ASSERT_NOT_EMPTY(path);
+	const auto native_path = std::filesystem::path(std::string(path));
+	ASSERT_TRUE(std::filesystem::exists(native_path));
+	std::filesystem::remove(native_path);
+	ASSERT_FALSE(std::filesystem::exists(native_path));
+	RETURN_TEST(0);
 }
 
 #ifdef UNIX
-int test_file_temporary_missing_directory() {
-	const std::string fn = "test_file_temporary_missing_directory";
+int test_temporary_missing_directory() {
 	const char* previous = std::getenv("TMPDIR");
 	const bool had_previous = previous != nullptr;
 	const std::string previous_value = had_previous ? previous : "";
 	setenv("TMPDIR", "/stormbyte-system-no-such-temp-directory-2.0.0", 1);
 	String path;
-	const bool created = StormByte::System::File::Temporary(path);
-	const auto error = StormByte::System::File::LastError().code();
+	const bool created = Temporary(path);
+	const auto error = LastError().code();
 	if (had_previous)
 		setenv("TMPDIR", previous_value.c_str(), 1);
 	else
 		unsetenv("TMPDIR");
-	ASSERT_FALSE(fn, created);
-	ASSERT_TRUE(fn, error == StormByte::System::make_error_code(StormByte::System::File::Error::NotFound));
-	RETURN_TEST(fn, 0);
+	ASSERT_FALSE(created);
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::File::Error::NotFound), error);
+	ASSERT_EQUAL(StormByte::System::file_category(), error.category());
+	RETURN_TEST(0);
 }
 #endif
 
@@ -112,14 +140,15 @@ int main() {
 	// -------------------
 	// CurrentExecutable
 	// -------------------
-	result += test_file_current_executable();
+	result += test_current_executable();
 
 	// -------------------
 	// Temporary
 	// -------------------
-	result += test_file_temporary();
+	result += test_temporary();
+	result += test_temporary_default_prefix();
 #ifdef UNIX
-	result += test_file_temporary_missing_directory();
+	result += test_temporary_missing_directory();
 #endif
 
 	if (result == 0)

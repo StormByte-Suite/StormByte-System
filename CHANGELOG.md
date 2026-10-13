@@ -22,7 +22,16 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
-[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.1...HEAD
+
+## [2.0.1] - 2026-10-13
+
+### Changed
+
+- Updated dependency pins.
+- Bumped version to 2.0.1.
+
+[2.0.1]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.0...2.0.1
 
 ## [2.0.0] - 2026-10-10
 

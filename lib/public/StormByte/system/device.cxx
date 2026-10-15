@@ -271,7 +271,7 @@ namespace {
 
 	Kind ClassifyLinuxBlock(const dev_t id) {
 		const auto sys = std::filesystem::path("/sys/dev/block") /
-			(std::to_string(gnu_dev_major(id)) + ":" + std::to_string(gnu_dev_minor(id)));
+			(std::to_string(major(id)) + ":" + std::to_string(minor(id)));
 		const auto block = BlockRoot(sys);
 		if (block.empty())
 			return Kind::HDD;

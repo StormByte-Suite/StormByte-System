@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Fixed
+
+- Linux device classification splits `dev_t` with the `major` and `minor` macros from `<sys/sysmacros.h>`. `gnu_dev_major` and `gnu_dev_minor` are glibc-only, so `device.cxx` did not compile on musl.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.1...HEAD
 
 ## [2.0.1] - 2026-10-13

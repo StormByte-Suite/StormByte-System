@@ -59,7 +59,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 	message(WARNING "ENABLE_PGO on a Debug build: the profile will not match an optimized binary")
 endif()
 
-# MSVC PGO is LTCG. CMake's own /LTCG would override /GENPROFILE, so own both flags.
+# MSVC PGO is LTCG. CMake's own bare /LTCG replaces the profile mode, so IPO
+# stays off. /GENPROFILE and /USEPROFILE alone fail with LNK1220: they require
+# an /LTCG specification. The combined flags are that specification.
 if(_pgo_kind STREQUAL "MSVC")
 	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 	foreach(_pgo_cfg RELEASE RELWITHDEBINFO MINSIZEREL DEBUG)
@@ -164,7 +166,7 @@ if(PGO_STAGE STREQUAL "generate")
 		_pgo_link_clang_profile_runtime()
 	else()
 		add_compile_options(/GL)
-		add_link_options(/GENPROFILE)
+		add_link_options(/LTCG:PGINSTRUMENT)
 	endif()
 	message(STATUS "ENABLE_PGO: instrumented build, profile ${PGO_PROFILE_DIR}")
 	return()
@@ -194,7 +196,7 @@ elseif(_pgo_kind STREQUAL "CLANG_CL")
 	)
 else()
 	add_compile_options(/GL)
-	add_link_options(/USEPROFILE)
+	add_link_options(/LTCG:PGOPTIMIZE)
 endif()
 message(STATUS "ENABLE_PGO: this directory uses the profile. Training runs in ${PGO_INSTR_DIR}")
 

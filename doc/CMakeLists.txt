@@ -34,7 +34,7 @@ if(ENABLE_DOC)
 
 	set(DOXYGEN_INCLUDE_PATH
 		"${CMAKE_SOURCE_DIR}/lib/public"
-		"${CMAKE_SOURCE_DIR}/thirdparty/StormByte/base/src/lib/public"
+		"${BUILDMASTER_INSTALL_INCLUDEDIR}"
 	)
 	set(DOXYGEN_STRIP_FROM_PATH "${CMAKE_SOURCE_DIR}")
 	set(DOXYGEN_STRIP_FROM_INC_PATH "${CMAKE_SOURCE_DIR}/lib/public")

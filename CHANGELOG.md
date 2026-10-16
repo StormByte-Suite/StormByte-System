@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 StormByte System is the C++26 process, device and host layer of the StormByte suite.
 
-It depends directly on [StormByte Base 2.0.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.0.0) or newer. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
+It depends directly on [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) 2.1.0 and [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
 
 Spawn children with piped stdin/stdout/stderr, classify the medium behind a path, resolve directories and the current executable, inspect the machine, name the calling thread, and expand environment strings. POSIX and Windows stay behind one API. Failures are `StormByte::Error::Fault` in a per-type domain (`StormByte.System.*`). Nothing in this module throws. Text that crosses a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::WString`, not `std::string` by value.
 
@@ -22,11 +22,25 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.2...HEAD
+
+## [2.0.2] - 2026-10-16
+
+### Added
+
+- `ENABLE_PGO` and `ENABLE_LTO`. Profile-guided optimization trains in `pgo-instr` and installs this build. Link-time optimization follows `ENABLE_LTO` (default ON) for every build type. Both apply to System. Base is not rebuilt.
+
+### Changed
+
+- Requires [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0. An older install is not used; the `buildmaster` submodule supplies 2.1.0.
+- Requires [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) 2.1.0. The build downloads that release archive (`stormbyte_component_url`) and links it with `BACKEND=binary`. The Base submodule is gone. The archive matches this OS and C++ runtime: `libstdc++` or `libc++` on Linux and macOS, no runtime suffix on Windows. Doxygen include path is `${BUILDMASTER_INSTALL_INCLUDEDIR}`, not `thirdparty/StormByte/base/src`.
+- Bumped version to 2.0.2.
+
 ### Fixed
 
 - Linux device classification splits `dev_t` with the `major` and `minor` macros from `<sys/sysmacros.h>`. `gnu_dev_major` and `gnu_dev_minor` are glibc-only, so `device.cxx` did not compile on musl.
 
-[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.1...HEAD
+[2.0.2]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.1...2.0.2
 
 ## [2.0.1] - 2026-10-13
 

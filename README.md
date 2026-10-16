@@ -48,7 +48,9 @@ cmake --build build -j
 cmake --install build
 ```
 
-Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default ON). A plain configure builds the shared library. `-DBUILD_SHARED_LIBS=OFF` builds a static archive; on Windows the headers then do not use `dllimport`. Vendored StormByte Base follows the same mode.
+Needs a C++26 compiler, CMake 3.28 or newer, [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0, and [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) 2.1.0. Configure downloads the matching Base release archive. There is no Base submodule. BuildMaster is the installed package when it is >= 2.1.0, otherwise the `buildmaster` submodule.
+
+Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default ON). A plain configure builds the shared library. `-DBUILD_SHARED_LIBS=OFF` builds a static archive; on Windows the headers then do not use `dllimport`. The downloaded Base archive is the same mode.
 
 A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that is usually the simpler way to ship: the user can replace that file. A static archive is folded into your binary. The LGPL still applies to this code; you must give the recipient a way to relink your product with a different build of this library. If that does not fit how you distribute the final product, a commercial license is available from the copyright holder (see [License](#license)).
 
@@ -81,7 +83,8 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Dependency | Role |
 |------------|------|
-| [StormByte Base 2.0.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.0.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
+| [StormByte Base 2.1.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
+| [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0 | Downloads that Base archive and builds this module |
 
 ## The rest of the suite
 

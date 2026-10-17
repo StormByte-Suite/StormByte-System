@@ -139,7 +139,7 @@ jobs:
 
   ###########################################################################
   # macOS
-  # clang is libc++. gcc is libstdc++. Both are in the filename.
+  # Apple Clang only. One archive, no standard-library suffix.
   ###########################################################################
   build-macos:
     needs: [checkout-bootstrap]
@@ -149,12 +149,8 @@ jobs:
       matrix:
         include:
           - compiler: clang
-            stdlib: libc++
-            asset: macos-arm64-libc++
-          - compiler: gcc
-            stdlib: libstdc++
-            asset: macos-arm64-libstdc++
-    name: macos-${{ matrix.stdlib }}
+            asset: macos-arm64
+    name: macos
     env:
       DYLD_LIBRARY_PATH: ${{ github.workspace }}/build/lib:${{ github.workspace }}/build/buildmaster/install/lib:${{ github.workspace }}/build/buildmaster/install/lib64
 

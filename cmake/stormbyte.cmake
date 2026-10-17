@@ -5,9 +5,9 @@
 # The archive name matches release.yml: StormByte-<tag>-<os>-<arch>[-stdlib].zip
 # Windows has no runtime suffix. MSVC and clang-cl share that zip: they are
 # ABI compatible, so clang-cl is neither libc++ nor libstdc++. libc++ is
-# chosen only for Clang. GCC is always libstdc++. macOS GCC still preprocesses
-# the SDK and defines _LIBCPP_VERSION, so a header probe would pick the wrong
-# zip. Clang on Linux may be libstdc++ unless -stdlib=libc++ is set, so that
+# chosen only for Clang. GCC is always libstdc++. macOS is Apple Clang only
+# and the archive has no standard-library suffix. Clang on Linux may be
+# libstdc++ unless -stdlib=libc++ is set, so that
 # one case still asks the preprocessor. One pass, no compile and no link.
 
 function(_stormbyte_cxx_blob _out)
@@ -24,8 +24,8 @@ function(_stormbyte_stdlib _out)
 		message(FATAL_ERROR
 			"stormbyte_component_url: the C++ compiler is not known yet")
 	endif()
-	# GCC always links libstdc++. Do not probe: macOS GCC defines
-	# _LIBCPP_VERSION from the Apple SDK. clang-cl never gets here.
+	# Linux only. GCC links libstdc++. macOS never calls this.
+	# clang-cl never gets here.
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 		set(${_out} "libstdc++" PARENT_SCOPE)
 		return()
@@ -86,8 +86,13 @@ function(stormbyte_component_url out tag)
 	if(WIN32 OR _msvc_abi)
 		set(_tag "windows-${_arch}")
 	elseif(APPLE)
-		_stormbyte_stdlib(_stdlib)
-		set(_tag "macos-${_arch}-${_stdlib}")
+		# Apple Clang only. The archive has no standard-library suffix.
+		if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+			message(FATAL_ERROR
+				"stormbyte_component_url: macOS supports Apple Clang only "
+				"(got ${CMAKE_CXX_COMPILER_ID})")
+		endif()
+		set(_tag "macos-${_arch}")
 	elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		_stormbyte_stdlib(_stdlib)
 		set(_tag "linux-${_arch}-${_stdlib}")

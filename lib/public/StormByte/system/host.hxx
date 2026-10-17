@@ -154,7 +154,7 @@ struct StormByte::Error::Domain<StormByte::System::Host::Error> {
 	 * @param e Enumerator.
 	 * @return Human-readable message.
 	 */
-	static std::string Message(StormByte::System::Host::Error e) {
+	static STORMBYTE_FORCE_INLINE std::string Message(StormByte::System::Host::Error e) {
 		switch (e) {
 			case StormByte::System::Host::Error::Success:
 				return "Success";
@@ -174,10 +174,13 @@ namespace StormByte::System {
 
 	/**
 	 * @brief Builds an `std::error_code` from @ref Host::Error.
+	 * Header-only: a `std::` object is not a DLL return.
 	 * @param e Enumerator.
 	 * @return Code in @ref host_category().
 	 */
-	STORMBYTE_SYSTEM_PUBLIC std::error_code make_error_code(Host::Error e) noexcept;
+	STORMBYTE_FORCE_INLINE std::error_code make_error_code(Host::Error e) noexcept {
+		return std::error_code(static_cast<int>(e), host_category());
+	}
 }
 
 namespace std {

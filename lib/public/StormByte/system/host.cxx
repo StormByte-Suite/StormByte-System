@@ -351,8 +351,4 @@ namespace StormByte::System {
 		static StormByte::Error::Category<enum Host::Error> instance;
 		return instance;
 	}
-
-	std::error_code make_error_code(const enum Host::Error e) noexcept {
-		return std::error_code(static_cast<int>(e), host_category());
-	}
 }

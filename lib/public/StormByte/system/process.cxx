@@ -871,8 +871,4 @@ namespace StormByte::System {
 		static StormByte::Error::Category<enum Process::Error> instance;
 		return instance;
 	}
-
-	std::error_code make_error_code(const enum Process::Error e) noexcept {
-		return std::error_code(static_cast<int>(e), process_category());
-	}
 }

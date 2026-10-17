@@ -92,12 +92,6 @@ namespace StormByte::System {
 			 * @return Expanded owned UTF-8 text.
 			 */
 			static StormByte::Safe::String ExpandEnvironmentVariable(std::wstring_view str);
-			#else
-			/**
-			 * @brief Current user home directory.
-			 * @return Home path.
-			 */
-			static std::filesystem::path HomePath();
 			#endif
 	};
 }

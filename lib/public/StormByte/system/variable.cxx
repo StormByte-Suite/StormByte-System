@@ -52,6 +52,17 @@
 
 using namespace StormByte::System;
 
+#ifndef WINDOWS
+namespace {
+	std::filesystem::path HomePath() {
+		if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0')
+			return home;
+		const struct passwd* pw = getpwuid(getuid());
+		return pw == nullptr || pw->pw_dir == nullptr ? std::filesystem::path() : std::filesystem::path(pw->pw_dir);
+	}
+}
+#endif
+
 StormByte::Safe::String Variable::Expand(std::string_view var) {
 	return ExpandEnvironmentVariable(var);
 }
@@ -93,12 +104,5 @@ StormByte::Safe::String Variable::ExpandEnvironmentVariable(std::wstring_view va
 			return StormByte::Safe::String(StormByte::Safe::WString(std::wstring_view(buffer.data(), result - 1)));
 		buffer.resize(result);
 	}
-}
-#else
-std::filesystem::path Variable::HomePath() {
-	if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0')
-		return home;
-	const struct passwd* pw = getpwuid(getuid());
-	return pw == nullptr || pw->pw_dir == nullptr ? std::filesystem::path() : std::filesystem::path(pw->pw_dir);
 }
 #endif

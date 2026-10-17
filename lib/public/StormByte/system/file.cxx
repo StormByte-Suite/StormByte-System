@@ -231,8 +231,4 @@ namespace StormByte::System {
 		static StormByte::Error::Category<enum File::Error> instance;
 		return instance;
 	}
-
-	std::error_code make_error_code(const enum File::Error e) noexcept {
-		return std::error_code(static_cast<int>(e), file_category());
-	}
 }

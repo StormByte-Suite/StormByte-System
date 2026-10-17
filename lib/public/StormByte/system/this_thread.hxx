@@ -119,7 +119,7 @@ struct StormByte::Error::Domain<StormByte::System::ThisThread::Error> {
 	 * @param e Enumerator.
 	 * @return Human-readable message.
 	 */
-	static std::string Message(StormByte::System::ThisThread::Error e) {
+	static STORMBYTE_FORCE_INLINE std::string Message(StormByte::System::ThisThread::Error e) {
 		switch (e) {
 			case StormByte::System::ThisThread::Error::Success:
 				return "Success";
@@ -141,10 +141,13 @@ namespace StormByte::System {
 
 	/**
 	 * @brief Builds an `std::error_code` from @ref ThisThread::Error.
+	 * Header-only: a `std::` object is not a DLL return.
 	 * @param e Enumerator.
 	 * @return Code in @ref this_thread_category().
 	 */
-	STORMBYTE_SYSTEM_PUBLIC std::error_code make_error_code(ThisThread::Error e) noexcept;
+	STORMBYTE_FORCE_INLINE std::error_code make_error_code(ThisThread::Error e) noexcept {
+		return std::error_code(static_cast<int>(e), this_thread_category());
+	}
 }
 
 namespace std {

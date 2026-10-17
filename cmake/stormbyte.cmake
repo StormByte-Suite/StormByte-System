@@ -3,8 +3,9 @@
 # stormbyte_component_url(<outvar> <tag>)
 # Writes the download URL for that release tag into <outvar>.
 # The archive name matches release.yml: StormByte-<tag>-<os>-<arch>[-stdlib].zip
-# Windows has no runtime suffix. libc++ is chosen only for Clang, never for
-# GCC or clang-cl: those archives are libstdc++. macOS GCC still preprocesses
+# Windows has no runtime suffix. MSVC and clang-cl share that zip: they are
+# ABI compatible, so clang-cl is neither libc++ nor libstdc++. libc++ is
+# chosen only for Clang. GCC is always libstdc++. macOS GCC still preprocesses
 # the SDK and defines _LIBCPP_VERSION, so a header probe would pick the wrong
 # zip. Clang on Linux may be libstdc++ unless -stdlib=libc++ is set, so that
 # one case still asks the preprocessor. One pass, no compile and no link.
@@ -23,16 +24,16 @@ function(_stormbyte_stdlib _out)
 		message(FATAL_ERROR
 			"stormbyte_component_url: the C++ compiler is not known yet")
 	endif()
-	# AppleClang matches "Clang". clang-cl simulates MSVC.
-	set(_clang FALSE)
-	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang"
-			AND NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"
-			AND NOT CMAKE_CXX_COMPILER MATCHES "(^|[/\\])clang-cl(-[0-9.]+)?(\\.exe)?$")
-		set(_clang TRUE)
-	endif()
-	if(NOT _clang)
+	# GCC always links libstdc++. Do not probe: macOS GCC defines
+	# _LIBCPP_VERSION from the Apple SDK. clang-cl never gets here.
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 		set(${_out} "libstdc++" PARENT_SCOPE)
 		return()
+	endif()
+	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+		message(FATAL_ERROR
+			"stormbyte_component_url: ${CMAKE_CXX_COMPILER_ID} does not use a "
+			"libc++ or libstdc++ archive")
 	endif()
 	_stormbyte_cxx_blob(_blob)
 	separate_arguments(_flags UNIX_COMMAND "${_blob}")
@@ -75,7 +76,14 @@ function(stormbyte_component_url out tag)
 			"stormbyte_component_url: unsupported architecture '${CMAKE_SYSTEM_PROCESSOR}'")
 	endif()
 
-	if(WIN32)
+	# MSVC and clang-cl share the Windows archive. No stdlib suffix.
+	set(_msvc_abi FALSE)
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"
+			OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"
+			OR CMAKE_CXX_COMPILER MATCHES "(^|[/\\])clang-cl(-[0-9.]+)?(\\.exe)?$")
+		set(_msvc_abi TRUE)
+	endif()
+	if(WIN32 OR _msvc_abi)
 		set(_tag "windows-${_arch}")
 	elseif(APPLE)
 		_stormbyte_stdlib(_stdlib)

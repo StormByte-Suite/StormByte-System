@@ -3,9 +3,11 @@
 # stormbyte_component_url(<outvar> <tag>)
 # Writes the download URL for that release tag into <outvar>.
 # The archive name matches release.yml: StormByte-<tag>-<os>-<arch>[-stdlib].zip
-# Windows has no runtime suffix. Linux and macOS ask the C++ compiler which
-# standard library it will use, including a clang config that never appears
-# as a -stdlib flag. One preprocessor pass, no compile and no link.
+# Windows has no runtime suffix. libc++ is chosen only for Clang, never for
+# GCC or clang-cl: those archives are libstdc++. macOS GCC still preprocesses
+# the SDK and defines _LIBCPP_VERSION, so a header probe would pick the wrong
+# zip. Clang on Linux may be libstdc++ unless -stdlib=libc++ is set, so that
+# one case still asks the preprocessor. One pass, no compile and no link.
 
 function(_stormbyte_cxx_blob _out)
 	set(_blob "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_INIT} $ENV{CXXFLAGS}")
@@ -20,6 +22,17 @@ function(_stormbyte_stdlib _out)
 	if(NOT CMAKE_CXX_COMPILER)
 		message(FATAL_ERROR
 			"stormbyte_component_url: the C++ compiler is not known yet")
+	endif()
+	# AppleClang matches "Clang". clang-cl simulates MSVC.
+	set(_clang FALSE)
+	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang"
+			AND NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC"
+			AND NOT CMAKE_CXX_COMPILER MATCHES "(^|[/\\])clang-cl(-[0-9.]+)?(\\.exe)?$")
+		set(_clang TRUE)
+	endif()
+	if(NOT _clang)
+		set(${_out} "libstdc++" PARENT_SCOPE)
+		return()
 	endif()
 	_stormbyte_cxx_blob(_blob)
 	separate_arguments(_flags UNIX_COMMAND "${_blob}")

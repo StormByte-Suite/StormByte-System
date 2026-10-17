@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           name="${{ github.event.repository.name }}-${{ github.ref_name }}-${{ matrix.asset }}.zip"
-          for notice in LICENSE COPYING.* THIRDPARTY; do
+          for notice in LICENSE COPYING.* THIRD-PARTY; do
             if [[ -f "${notice}" ]]; then
               cp "${notice}" package/
             fi
@@ -187,7 +187,7 @@ jobs:
         run: |
           set -euo pipefail
           name="${{ github.event.repository.name }}-${{ github.ref_name }}-${{ matrix.asset }}.zip"
-          for notice in LICENSE COPYING.* THIRDPARTY; do
+          for notice in LICENSE COPYING.* THIRD-PARTY; do
             if [[ -f "${notice}" ]]; then
               cp "${notice}" package/
             fi
@@ -250,7 +250,7 @@ jobs:
         run: |
           set -euo pipefail
           name="${{ github.event.repository.name }}-${{ github.ref_name }}-windows-x64.zip"
-          for notice in LICENSE COPYING.* THIRDPARTY; do
+          for notice in LICENSE COPYING.* THIRD-PARTY; do
             if [[ -f "${notice}" ]]; then
               cp "${notice}" package/
             fi

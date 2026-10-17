@@ -31,7 +31,7 @@ Linked at run time, not compiled in
 ------------------------------------
 
 These are other shared libraries. They are not inside this file. Each has
-its own release archive, its own LICENSE and its own THIRDPARTY. The
+its own release archive, its own LICENSE and its own THIRD-PARTY. The
 versions below are the ones this tag is built against.
 
   - StormByte Base 2.1.0 — https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0

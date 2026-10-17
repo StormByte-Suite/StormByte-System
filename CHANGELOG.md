@@ -24,7 +24,7 @@ If you landed here from a release link and have not read the tree:
 
 ### Added
 
-- Release archives include `THIRDPARTY`. No third-party object code is compiled into this shared library. StormByte Base is linked at run time and keeps its own notice.
+- Release archives include `THIRD-PARTY` (not `THIRDPARTY`: on Windows and macOS that name is the same path as the `thirdparty/` directory, so the file never landed in those zips). No third-party object code is compiled into this shared library. StormByte Base is linked at run time and keeps its own notice.
 
 ### Fixed
 

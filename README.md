@@ -279,6 +279,8 @@ Original StormByte-System sources are dual-licensed: GNU Lesser General Public L
 
 The grant applies only to original StormByte-System source in this repository. It does not cover other StormByte modules or third-party material shipped here (including everything under `thirdparty/`), which remains under its own license. Neither license grants patent rights.
 
+Binary releases add THIRDPARTY beside LICENSE. That file is a notice for what was compiled into the shared library, not another grant. The texts it names are the COPYING.* files in the same archive.
+
 See [LICENSE](LICENSE) for the dual-license notice and [COPYING.LGPLv3](COPYING.LGPLv3) for the full GNU LGPL version 3 text. Also <https://www.gnu.org/licenses/lgpl-3.0.html>.
 
 Static linking under the LGPL is described under [Installation](#installation).

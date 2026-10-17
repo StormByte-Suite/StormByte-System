@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Added
+
+- Release archives include `THIRDPARTY`. No third-party object code is compiled into this shared library. StormByte Base is linked at run time and keeps its own notice.
+
 ### Fixed
 
 - `cmake/pgo.cmake` matches Base. MSVC PGO links with `/LTCG:PGINSTRUMENT` and `/LTCG:PGOPTIMIZE`. `/GENPROFILE` alone fails with LNK1220 because the current `link.exe` requires an `/LTCG` specification, and CMake's own `/LTCG` stays off so it does not replace the profile mode.

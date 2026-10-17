@@ -44,6 +44,7 @@ If you landed here from a release link and have not read the tree:
 ### Fixed
 
 - Linux device classification splits `dev_t` with the `major` and `minor` macros from `<sys/sysmacros.h>`. `gnu_dev_major` and `gnu_dev_minor` are glibc-only, so `device.cxx` did not compile on musl.
+- Part of the port: System exports no `operator<=>`. `std::strong_ordering` is not a DLL ABI. clang-cl returns it through a hidden pointer and MSVC does not pass one, so a call into a clang-built Base wrote at address 0. Ordering is compiled by the caller from Base 2.1.0, where those operators are `STORMBYTE_FORCE_INLINE`. This archive must be built against that Base.
 
 [2.0.2]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.1...2.0.2
 

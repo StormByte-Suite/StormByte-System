@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Changed
+
+- CI builds with `ENABLE_LTO=ON`, `ENABLE_PGO=OFF` and `ENABLE_TEST=ON`, then runs ctest. Profile-guided optimization stays on the release workflow.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.2...HEAD
 
 ## [2.0.2] - 2026-10-17

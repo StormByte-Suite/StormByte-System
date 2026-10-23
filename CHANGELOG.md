@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 StormByte System is the C++26 process, device and host layer of the StormByte suite.
 
-It depends directly on [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) 2.1.0 and [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
+It depends directly on [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) 2.2.0 and [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
 
 Spawn children with piped stdin/stdout/stderr, classify the medium behind a path, resolve directories and the current executable, inspect the machine, name the calling thread, and expand environment strings. POSIX and Windows stay behind one API. Failures are `StormByte::Error::Fault` in a per-type domain (`StormByte.System.*`). Nothing in this module throws. Text that crosses a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::WString`, not `std::string` by value.
 
@@ -22,7 +22,24 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
-[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.2...HEAD
+[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.0...HEAD
+
+## [2.1.0] - 2026-10-23
+
+### Added
+
+- `Host::CPU` query object with `Model`, `Manufacturer`, `Architecture`, `PhysicalCores`, `LogicalProcessors` and `Bitness`.
+- `Host::Motherboard` query object with independent `Manufacturer`, `Model` and `Revision` probes using Linux sysfs DMI, Windows BIOS registry and macOS IOKit. macOS revision reports `NotSupported`.
+- Host errors `NotSupported`, `Unavailable` and `Permission` distinguish missing properties from platform failures. Query objects perform no I/O on construction; accessors update `LastError` on demand, except `CPU::Bitness`.
+
+### Changed
+
+- Bumped StormByte Base dependency from 2.1.0 to [2.2.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0).
+- Bumped version to 2.1.0.
+- **Breaking:** `Host::CPU()` now constructs a query object instead of returning a processor brand string. Use `Host::CPU().Model()` for the previous text.
+- **Breaking:** moved `Host::Architecture()`, `Host::LogicalProcessors()` and `Host::Bitness()` to `Host::CPU` instance methods. `CPU::LogicalProcessors()` now updates `LastError` and counts OS-visible online processors (all processor groups on Windows); `CPU::Bitness()` preserves process pointer-width semantics and does not update `LastError`. Physical/available memory APIs are unchanged.
+
+[2.1.0]: https://github.com/StormByte-Suite/StormByte-System/compare/2.0.2...2.1.0
 
 ## [2.0.2] - 2026-10-19
 

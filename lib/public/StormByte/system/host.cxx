@@ -38,26 +38,33 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later OR LicenseRef-StormByte-Commercial
  */
 
-#include <StormByte/system/host.hxx>
-
 #include <StormByte/error.txx>
 #include <StormByte/safe/wstring.hxx>
+#include <StormByte/system/host.hxx>
 
+#include <cerrno>
+#include <cstddef>
+#include <filesystem>
+#include <fstream>
+#include <initializer_list>
+#include <limits>
+#include <set>
 #include <sstream>
 #include <string>
-#include <thread>
+#include <utility>
 #include <vector>
 
 #ifdef WINDOWS
 #include <windows.h>
 #elifdef MACOS
+#include <CoreFoundation/CoreFoundation.h>
+#include <IOKit/IOKitLib.h>
 #include <mach/mach.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <unistd.h>
 #else
-#include <fstream>
 #include <sys/utsname.h>
 #include <unistd.h>
 #endif
@@ -90,6 +97,57 @@ namespace {
 		return StormByte::Safe::String(text);
 	}
 
+	StormByte::Safe::String TextError(const Host::Error code) {
+		Store(code);
+		return {};
+	}
+
+	unsigned StoreCount(const unsigned count) {
+		Store(count == 0 ? Host::Error::Unavailable : Host::Error::Success);
+		return count;
+	}
+
+	std::string Trim(std::string value) {
+		const auto begin = value.find_first_not_of(" \t\r\n");
+		if (begin == std::string::npos)
+			return {};
+		const auto end = value.find_last_not_of(" \t\r\n");
+		return value.substr(begin, end - begin + 1);
+	}
+
+#ifdef WINDOWS
+	StormByte::Safe::String RegistryText(const wchar_t* key, const wchar_t* field) {
+		DWORD size = 0;
+		auto status = RegGetValueW(HKEY_LOCAL_MACHINE, key, field, RRF_RT_REG_SZ, nullptr, nullptr, &size);
+		auto fail = [](const LSTATUS error) {
+			if (error == ERROR_ACCESS_DENIED)
+				return TextError(Host::Error::Permission);
+			if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+				return TextError(Host::Error::Unavailable);
+			return TextError(Host::Error::Failed);
+		};
+		if (status != ERROR_SUCCESS)
+			return fail(status);
+		if (size < sizeof(wchar_t))
+			return TextError(Host::Error::Unavailable);
+		std::vector<wchar_t> buffer((size + sizeof(wchar_t) - 1) / sizeof(wchar_t), L'\0');
+		status = RegGetValueW(HKEY_LOCAL_MACHINE, key, field, RRF_RT_REG_SZ, nullptr, buffer.data(), &size);
+		if (status != ERROR_SUCCESS)
+			return fail(status);
+		const auto text = Trim(std::string(StormByte::Safe::String(StormByte::Safe::WString(buffer.data()))));
+		if (text.empty())
+			return TextError(Host::Error::Unavailable);
+		return StoreText(text, true);
+	}
+#else
+	Host::Error NativeError(const int code) {
+		if (code == EACCES || code == EPERM)
+			return Host::Error::Permission;
+		if (code == ENOENT || code == ENODEV)
+			return Host::Error::Unavailable;
+		return Host::Error::Failed;
+	}
+
 	StormByte::Safe::String NormalizeArch(std::string_view raw) {
 		if (raw == "x86_64" || raw == "amd64" || raw == "AMD64")
 			return StormByte::Safe::String("x86_64");
@@ -101,6 +159,100 @@ namespace {
 			return StormByte::Safe::String("arm");
 		return StormByte::Safe::String(raw);
 	}
+
+#ifdef MACOS
+	StormByte::Safe::String SysctlText(const char* key) {
+		std::size_t size = 0;
+		if (sysctlbyname(key, nullptr, &size, nullptr, 0) != 0)
+			return TextError(NativeError(errno));
+		if (size == 0)
+			return TextError(Host::Error::Unavailable);
+		std::vector<char> buffer(size + 1, '\0');
+		if (sysctlbyname(key, buffer.data(), &size, nullptr, 0) != 0)
+			return TextError(NativeError(errno));
+		const auto text = Trim(buffer.data());
+		if (text.empty())
+			return TextError(Host::Error::Unavailable);
+		return StoreText(text, true);
+	}
+
+	StormByte::Safe::String PlatformText(const CFStringRef key) {
+		const io_service_t service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
+		if (service == IO_OBJECT_NULL)
+			return TextError(Host::Error::Unavailable);
+		const CFTypeRef property = IORegistryEntryCreateCFProperty(service, key, kCFAllocatorDefault, 0);
+		IOObjectRelease(service);
+		if (property == nullptr)
+			return TextError(Host::Error::Unavailable);
+		std::string text;
+		bool valid = true;
+		if (CFGetTypeID(property) == CFDataGetTypeID()) {
+			const auto data = static_cast<CFDataRef>(property);
+			const auto length = CFDataGetLength(data);
+			if (length > 0) {
+				text.assign(reinterpret_cast<const char*>(CFDataGetBytePtr(data)), static_cast<std::size_t>(length));
+				const auto nul = text.find('\0');
+				if (nul != std::string::npos)
+					text.resize(nul);
+			}
+		}
+		else if (CFGetTypeID(property) == CFStringGetTypeID()) {
+			const auto string = static_cast<CFStringRef>(property);
+			const auto size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(string), kCFStringEncodingUTF8) + 1;
+			std::vector<char> buffer(static_cast<std::size_t>(size), '\0');
+			valid = CFStringGetCString(string, buffer.data(), size, kCFStringEncodingUTF8);
+			if (valid)
+				text = buffer.data();
+		}
+		else
+			valid = false;
+		CFRelease(property);
+		if (!valid)
+			return TextError(Host::Error::Failed);
+		text = Trim(std::move(text));
+		if (text.empty())
+			return TextError(Host::Error::Unavailable);
+		return StoreText(std::move(text), true);
+	}
+#else
+	StormByte::Safe::String FileText(const char* path) {
+		errno = 0;
+		std::ifstream in(path);
+		if (!in)
+			return TextError(NativeError(errno));
+		std::string text;
+		std::getline(in, text);
+		if (in.bad())
+			return TextError(Host::Error::Failed);
+		text = Trim(std::move(text));
+		if (text.empty())
+			return TextError(Host::Error::Unavailable);
+		return StoreText(std::move(text), true);
+	}
+
+	StormByte::Safe::String CpuField(const std::initializer_list<std::string_view> keys) {
+		errno = 0;
+		std::ifstream in("/proc/cpuinfo");
+		if (!in)
+			return TextError(NativeError(errno));
+		std::string line;
+		while (std::getline(in, line)) {
+			const auto colon = line.find(':');
+			if (colon == std::string::npos)
+				continue;
+			const auto key = Trim(line.substr(0, colon));
+			for (const auto candidate: keys) {
+				if (key != candidate)
+					continue;
+				auto value = Trim(line.substr(colon + 1));
+				if (!value.empty())
+					return StoreText(std::move(value), true);
+			}
+		}
+		return TextError(in.bad() ? Host::Error::Failed : Host::Error::Unavailable);
+	}
+#endif
+#endif
 
 #ifdef LINUX
 	std::string Unquote(std::string value) {
@@ -150,7 +302,7 @@ bool Host::Name(StormByte::Safe::String& name) {
 #endif
 }
 
-StormByte::Safe::String Host::Architecture() {
+StormByte::Safe::String Host::CPU::Architecture() const {
 #ifdef WINDOWS
 	SYSTEM_INFO info {};
 	GetNativeSystemInfo(&info);
@@ -174,38 +326,146 @@ StormByte::Safe::String Host::Architecture() {
 #endif
 }
 
-StormByte::Safe::String Host::CPU() {
+StormByte::Safe::String Host::CPU::Model() const {
 #ifdef WINDOWS
-	wchar_t value[512];
-	DWORD size = sizeof(value);
-	if (RegGetValueW(HKEY_LOCAL_MACHINE,
-			L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
-			L"ProcessorNameString", RRF_RT_REG_SZ, nullptr, value, &size) != ERROR_SUCCESS)
-		return StoreText({}, false);
-	return StoreText(std::string(StormByte::Safe::String(StormByte::Safe::WString(value))), true);
+	return RegistryText(L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"ProcessorNameString");
 #elifdef MACOS
-	char brand[256] = {};
-	std::size_t len = sizeof(brand);
-	if (sysctlbyname("machdep.cpu.brand_string", brand, &len, nullptr, 0) != 0)
-		return StoreText({}, false);
-	return StoreText(brand, true);
+	return SysctlText("machdep.cpu.brand_string");
 #else
-	std::ifstream in("/proc/cpuinfo");
-	if (!in)
-		return StoreText({}, false);
-	std::string line;
-	while (std::getline(in, line)) {
-		if (line.rfind("model name", 0) != 0)
-			continue;
-		const auto pos = line.find(':');
-		if (pos == std::string::npos)
-			return StoreText({}, false);
-		std::string model = line.substr(pos + 1);
-		while (!model.empty() && model.front() == ' ')
-			model.erase(model.begin());
-		return StoreText(model, !model.empty());
+	return CpuField({"model name", "Processor"});
+#endif
+}
+
+StormByte::Safe::String Host::CPU::Manufacturer() const {
+#ifdef WINDOWS
+	return RegistryText(L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"VendorIdentifier");
+#elifdef MACOS
+	return SysctlText("machdep.cpu.vendor");
+#else
+	return CpuField({"vendor_id", "CPU implementer"});
+#endif
+}
+
+unsigned Host::CPU::PhysicalCores() const {
+#ifdef WINDOWS
+	DWORD size = 0;
+	if (GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &size) || GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+		Store(Host::Error::Failed);
+		return 0;
 	}
-	return StoreText({}, false);
+	std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX> buffer(
+		(size + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) - 1) / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX));
+	if (!GetLogicalProcessorInformationEx(RelationProcessorCore, buffer.data(), &size)) {
+		Store(Host::Error::Failed);
+		return 0;
+	}
+	unsigned count = 0;
+	std::size_t offset = 0;
+	while (offset < size) {
+		const auto remaining = size - offset;
+		constexpr auto header_size = offsetof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, Processor);
+		if (remaining < header_size) {
+			Store(Host::Error::Failed);
+			return 0;
+		}
+		const auto entry = reinterpret_cast<const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*>(
+			reinterpret_cast<const unsigned char*>(buffer.data()) + offset);
+		if (entry->Size < header_size || entry->Size > remaining) {
+			Store(Host::Error::Failed);
+			return 0;
+		}
+		if (entry->Relationship == RelationProcessorCore)
+			++count;
+		offset += entry->Size;
+	}
+	return StoreCount(count);
+#elifdef MACOS
+	unsigned count = 0;
+	std::size_t size = sizeof(count);
+	if (sysctlbyname("hw.physicalcpu", &count, &size, nullptr, 0) != 0) {
+		Store(NativeError(errno));
+		return 0;
+	}
+	return StoreCount(count);
+#else
+	std::error_code error;
+	std::filesystem::directory_iterator entries("/sys/devices/system/cpu", error);
+	if (error) {
+		Store(NativeError(error.value()));
+		return 0;
+	}
+	std::set<std::pair<int, int>> cores;
+	const std::filesystem::directory_iterator end;
+	for (; entries != end; entries.increment(error)) {
+		if (error)
+			break;
+		const auto name = entries->path().filename().string();
+		if (!name.starts_with("cpu") || name.size() == 3 || name.find_first_not_of("0123456789", 3) != std::string::npos)
+			continue;
+		const auto topology = entries->path() / "topology";
+		errno = 0;
+		std::ifstream package_file(topology / "physical_package_id");
+		if (!package_file) {
+			Store(NativeError(errno));
+			return 0;
+		}
+		int package = -1;
+		int core = -1;
+		if (!(package_file >> package)) {
+			Store(Host::Error::Failed);
+			return 0;
+		}
+		errno = 0;
+		std::ifstream core_file(topology / "core_id");
+		if (!core_file) {
+			Store(NativeError(errno));
+			return 0;
+		}
+		if (!(core_file >> core)) {
+			Store(Host::Error::Failed);
+			return 0;
+		}
+		if (package < 0 || core < 0) {
+			Store(Host::Error::Unavailable);
+			return 0;
+		}
+		cores.emplace(package, core);
+	}
+	if (error || cores.size() > std::numeric_limits<unsigned>::max()) {
+		Store(Host::Error::Failed);
+		return 0;
+	}
+	return StoreCount(static_cast<unsigned>(cores.size()));
+#endif
+}
+
+StormByte::Safe::String Host::Motherboard::Manufacturer() const {
+#ifdef WINDOWS
+	return RegistryText(L"HARDWARE\\DESCRIPTION\\System\\BIOS", L"BaseBoardManufacturer");
+#elifdef MACOS
+	return PlatformText(CFSTR("manufacturer"));
+#else
+	return FileText("/sys/class/dmi/id/board_vendor");
+#endif
+}
+
+StormByte::Safe::String Host::Motherboard::Model() const {
+#ifdef WINDOWS
+	return RegistryText(L"HARDWARE\\DESCRIPTION\\System\\BIOS", L"BaseBoardProduct");
+#elifdef MACOS
+	return PlatformText(CFSTR("board-id"));
+#else
+	return FileText("/sys/class/dmi/id/board_name");
+#endif
+}
+
+StormByte::Safe::String Host::Motherboard::Revision() const {
+#ifdef WINDOWS
+	return RegistryText(L"HARDWARE\\DESCRIPTION\\System\\BIOS", L"BaseBoardVersion");
+#elifdef MACOS
+	return TextError(Host::Error::NotSupported);
+#else
+	return FileText("/sys/class/dmi/id/board_version");
 #endif
 }
 
@@ -338,11 +598,33 @@ StormByte::ByteSize Host::AvailableMemory() {
 #endif
 }
 
-unsigned Host::LogicalProcessors() noexcept {
-	return std::thread::hardware_concurrency();
+unsigned Host::CPU::LogicalProcessors() const noexcept {
+#ifdef WINDOWS
+	const auto count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+	if (count == 0) {
+		Store(Host::Error::Failed);
+		return 0;
+	}
+	return StoreCount(count);
+#elifdef MACOS
+	unsigned count = 0;
+	std::size_t size = sizeof(count);
+	if (sysctlbyname("hw.logicalcpu", &count, &size, nullptr, 0) != 0) {
+		Store(NativeError(errno));
+		return 0;
+	}
+	return StoreCount(count);
+#else
+	const long count = sysconf(_SC_NPROCESSORS_ONLN);
+	if (count <= 0 || static_cast<unsigned long>(count) > std::numeric_limits<unsigned>::max()) {
+		Store(Host::Error::Failed);
+		return 0;
+	}
+	return StoreCount(static_cast<unsigned>(count));
+#endif
 }
 
-unsigned Host::Bitness() noexcept {
+unsigned Host::CPU::Bitness() const noexcept {
 	return static_cast<unsigned>(sizeof(void*) * 8u);
 }
 

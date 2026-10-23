@@ -48,7 +48,7 @@ cmake --build build -j
 cmake --install build
 ```
 
-Needs a C++26 compiler, CMake 3.28 or newer, [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0, and [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) 2.1.0. Configure downloads the matching Base release archive. There is no Base submodule. BuildMaster is the installed package when it is >= 2.1.0, otherwise the `buildmaster` submodule.
+Needs a C++26 compiler, CMake 3.28 or newer, [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0, and [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) 2.2.0. Configure downloads the matching Base release archive. There is no Base submodule. BuildMaster is the installed package when it is >= 2.1.0, otherwise the `buildmaster` submodule.
 
 Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default ON). A plain configure builds the shared library. `-DBUILD_SHARED_LIBS=OFF` builds a static archive; on Windows the headers then do not use `dllimport`. The downloaded Base archive is the same mode.
 
@@ -83,7 +83,7 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Dependency | Role |
 |------------|------|
-| [StormByte Base 2.1.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.1.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
+| [StormByte Base 2.2.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
 | [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0 | Downloads that Base archive and builds this module |
 
 ## The rest of the suite
@@ -108,7 +108,9 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 | `Device` | Medium behind a path. `operator bool` is probe success, not permission. `Fault()` is `StormByte.System.Device`. `Throughput` is a nominal rate. `Window` is a suggested transfer size. Both are `ByteSize`. |
 | `Directory` | `Current`, `Home`, `Temporary`, `CurrentExecutable`. `bool` + out `String`. `LastError()` is TLS in this module. |
 | `File` | `Temporary(prefix, suffix)` (caller unlinks) and `CurrentExecutable`. Same `bool` + `LastError` contract. |
-| `Host` | `Name`, `Architecture`, `CPU`, `OS`, `Kernel`, `PageSize`, `PhysicalMemory`, `AvailableMemory`, `LogicalProcessors`, `Bitness`. Sizes are `ByteSize`. |
+| `Host` | `Name`, `OS`, `Kernel`, `PageSize`, `PhysicalMemory`, `AvailableMemory`; query objects `CPU` and `Motherboard`. Sizes are `ByteSize`. |
+| `Host::CPU` | `Model`, `Manufacturer`, `Architecture`, `PhysicalCores`, `LogicalProcessors`, `Bitness`. |
+| `Host::Motherboard` | Firmware `Manufacturer`, `Model`, `Revision`. Fields may be unavailable independently. |
 | `ThisThread` | `Sleep`; `Name` get/set. Set returns `false` and `TooLong` if the platform limit is exceeded. |
 | `Variable` | Expand environment strings. One public entry per width (`string_view`, `wstring_view`). The result is `StormByte::Safe::String`. |
 | `System::EoF` | Close process stdin. |
@@ -214,13 +216,25 @@ StormByte::System::Host::Name(hostname);
 auto os = StormByte::System::Host::OS();       // "Gentoo 2.18", "Windows 11", "macOS 15.1"
 auto kernel = StormByte::System::Host::Kernel(); // "Linux … SMP PREEMPT_DYNAMIC", "NT 10.0.26100", "Darwin …"
 auto cpu = StormByte::System::Host::CPU();
-auto arch = StormByte::System::Host::Architecture();
+auto model = cpu.Model();
+auto vendor = cpu.Manufacturer();
+auto arch = cpu.Architecture();
+unsigned cores = cpu.PhysicalCores();
+unsigned threads = cpu.LogicalProcessors();
+unsigned bits = cpu.Bitness();
+auto board = StormByte::System::Host::Motherboard();
+auto board_model = board.Model();
+if (StormByte::System::Host::LastError())
+	/* inspect Unavailable, NotSupported, Permission or Failed */;
 auto page = StormByte::System::Host::PageSize();
 auto ram = StormByte::System::Host::PhysicalMemory();
-unsigned bits = StormByte::System::Host::Bitness();
 ```
 
-`LogicalProcessors` and `Bitness` do not update `LastError`. The others do. A failed `ByteSize` is zero; a failed `String` is empty.
+`CPU` and `Motherboard` are stateless, copyable query objects. Construction does not probe or change `LastError`; accessors query on demand and update it, except `CPU::Bitness`. Read `LastError()` immediately after the accessor of interest. A failed `ByteSize` or count is zero; a failed `String` is empty.
+
+`CPU::Bitness` remains the pointer width of the calling process, not the CPU's maximum width. Core/processor counts cover the OS-visible topology rather than the process affinity or a container's quota. On Linux, physical cores are deduplicated by package/core IDs from sysfs; logical processors are online CPUs. On Windows they include all processor groups. Model/vendor describe the first reported processor; heterogeneous systems need not have identical CPUs. Linux ARM may expose the vendor as a numeric implementer code; a missing vendor on macOS is `Unavailable`, not an inferred value.
+
+Motherboard information comes from Linux sysfs DMI, the firmware-populated Windows BIOS registry, or macOS IOKit. macOS `Model` is `board-id`; `Revision` is `NotSupported`. Firmware, VMs, containers and permissions can leave individual properties unavailable. No external commands or additional dependencies are needed. Memory remains in `PhysicalMemory()` / `AvailableMemory()`; there is no duplicate memory object or firmware RAM expansion limit.
 
 ### Calling thread
 

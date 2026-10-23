@@ -40,8 +40,8 @@
 
 #pragma once
 
-#include <StormByte/error.hxx>
 #include <StormByte/byte_size.hxx>
+#include <StormByte/error.hxx>
 #include <StormByte/safe/string.hxx>
 #include <StormByte/system/visibility.h>
 
@@ -55,11 +55,11 @@ namespace StormByte::System {
 	/**
 	 * @brief Identity and capacity of this machine.
 	 *
-	 * @c Name returns @c true on success. @c Architecture, @c CPU, @c OS,
-	 * @c Kernel, @c PageSize, @c PhysicalMemory and @c AvailableMemory
-	 * return a value and update @ref LastError. On failure the string is
-	 * empty or the @c ByteSize is zero. @c LogicalProcessors and @c Bitness
-	 * do not touch @ref LastError.
+	 * @c Name returns @c true on success. Queries return a value and update
+	 * @ref StormByte::System::Host::LastError, except
+	 * @ref StormByte::System::Host::CPU::Bitness. On failure strings are empty,
+	 * sizes and counts are zero. CPU and Motherboard are stateless query
+	 * objects: construction performs no I/O; each accessor probes the host.
 	 */
 	namespace Host {
 		/**
@@ -70,7 +70,10 @@ namespace StormByte::System {
 		 */
 		enum class Error {
 			Success = 0,	///< No error
-			Failed			///< The platform call failed
+			Failed,			///< The platform call failed
+			NotSupported,	///< No native source for this property
+			Unavailable,	///< The platform did not supply this property
+			Permission		///< Access to this property was denied
 		};
 
 		/**
@@ -87,16 +90,151 @@ namespace StormByte::System {
 		STORMBYTE_SYSTEM_PUBLIC bool Name(StormByte::Safe::String& name);
 
 		/**
-		 * @brief Instruction-set name of this machine.
-		 * @return `x86_64`, `arm64`, `x86` or another platform token. Empty on failure.
+		 * @class CPU
+		 * @brief Native CPU queries for this machine, not a cached snapshot.
+		 *
+		 * Model and Manufacturer describe the first reported processor.
+		 * Counts cover the processors visible to the OS, not necessarily the
+		 * calling process's affinity or container quota.
 		 */
-		STORMBYTE_SYSTEM_PUBLIC StormByte::Safe::String Architecture();
+		class STORMBYTE_SYSTEM_PUBLIC CPU {
+			public:
+				/**
+				 * @brief Construct a stateless query object without probing.
+				 */
+				CPU() = default;
+
+				/**
+				 * @brief Copy a query object.
+				 * @param other Source query object.
+				 */
+				CPU(const CPU& other) = default;
+
+				/**
+				 * @brief Move a query object.
+				 * @param other Source query object.
+				 */
+				CPU(CPU&& other) noexcept = default;
+
+				/**
+				 * @brief Destroy a query object.
+				 */
+				~CPU() = default;
+
+				/**
+				 * @brief Copy-assign a query object.
+				 * @param other Source query object.
+				 * @return This object.
+				 */
+				CPU& operator=(const CPU& other) = default;
+
+				/**
+				 * @brief Move-assign a query object.
+				 * @param other Source query object.
+				 * @return This object.
+				 */
+				CPU& operator=(CPU&& other) noexcept = default;
+
+				/**
+				 * @brief Processor brand text.
+				 * @return Model name, or empty on failure.
+				 */
+				StormByte::Safe::String Model() const;
+
+				/**
+				 * @brief Processor vendor identifier, when exposed by the OS.
+				 * @return Vendor text or implementer code, or empty on failure.
+				 */
+				StormByte::Safe::String Manufacturer() const;
+
+				/**
+				 * @brief Native instruction-set name.
+				 * @return `x86_64`, `arm64`, `x86` or another OS token; empty on failure.
+				 */
+				StormByte::Safe::String Architecture() const;
+
+				/**
+				 * @brief Physical core count across processor packages.
+				 * @return Core count, or zero on failure.
+				 */
+				unsigned PhysicalCores() const;
+
+				/**
+				 * @brief Logical processor count visible to the OS.
+				 * @return Processor count, or zero on failure; updates LastError.
+				 */
+				unsigned LogicalProcessors() const noexcept;
+
+				/**
+				 * @brief Pointer width of this process, not CPU capability.
+				 * @return 32 or 64; does not update LastError.
+				 */
+				unsigned Bitness() const noexcept;
+		};
 
 		/**
-		 * @brief Processor brand string.
-		 * @return Brand text. Empty on failure.
+		 * @class Motherboard
+		 * @brief Native motherboard queries, without requiring external commands.
+		 *
+		 * Firmware/VM data may be absent. Each accessor independently updates
+		 * LastError; one unavailable field does not invalidate the other fields.
 		 */
-		STORMBYTE_SYSTEM_PUBLIC StormByte::Safe::String CPU();
+		class STORMBYTE_SYSTEM_PUBLIC Motherboard {
+			public:
+				/**
+				 * @brief Construct a stateless query object without probing.
+				 */
+				Motherboard() = default;
+
+				/**
+				 * @brief Copy a query object.
+				 * @param other Source query object.
+				 */
+				Motherboard(const Motherboard& other) = default;
+
+				/**
+				 * @brief Move a query object.
+				 * @param other Source query object.
+				 */
+				Motherboard(Motherboard&& other) noexcept = default;
+
+				/**
+				 * @brief Destroy a query object.
+				 */
+				~Motherboard() = default;
+
+				/**
+				 * @brief Copy-assign a query object.
+				 * @param other Source query object.
+				 * @return This object.
+				 */
+				Motherboard& operator=(const Motherboard& other) = default;
+
+				/**
+				 * @brief Move-assign a query object.
+				 * @param other Source query object.
+				 * @return This object.
+				 */
+				Motherboard& operator=(Motherboard&& other) noexcept = default;
+
+				/**
+				 * @brief Board manufacturer supplied by firmware.
+				 * @return Manufacturer text, or empty on failure.
+				 */
+				StormByte::Safe::String Manufacturer() const;
+
+				/**
+				 * @brief Board product identifier.
+				 * @return Model (IOKit board-id on macOS), or empty on failure.
+				 */
+				StormByte::Safe::String Model() const;
+
+				/**
+				 * @brief Board revision supplied by firmware.
+				 * @return Revision, or empty on failure; NotSupported on macOS.
+				 */
+				StormByte::Safe::String Revision() const;
+		};
 
 		/**
 		 * @brief Operating system brand and version.
@@ -127,18 +265,6 @@ namespace StormByte::System {
 		 * @return Size in bytes, or zero on failure.
 		 */
 		STORMBYTE_SYSTEM_PUBLIC StormByte::ByteSize AvailableMemory();
-
-		/**
-		 * @brief Logical processor count.
-		 * @return Hardware concurrency, or @c 0 if unknown.
-		 */
-		STORMBYTE_SYSTEM_PUBLIC unsigned LogicalProcessors() noexcept;
-
-		/**
-		 * @brief Pointer width of this process.
-		 * @return @c 32 or @c 64.
-		 */
-		STORMBYTE_SYSTEM_PUBLIC unsigned Bitness() noexcept;
 	}
 }
 
@@ -160,6 +286,12 @@ struct StormByte::Error::Domain<StormByte::System::Host::Error> {
 				return "Success";
 			case StormByte::System::Host::Error::Failed:
 				return "Host operation failed";
+			case StormByte::System::Host::Error::NotSupported:
+				return "Host property is not supported";
+			case StormByte::System::Host::Error::Unavailable:
+				return "Host property is unavailable";
+			case StormByte::System::Host::Error::Permission:
+				return "Host property access denied";
 		}
 		return "Unknown Host error";
 	}

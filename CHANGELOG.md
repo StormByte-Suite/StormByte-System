@@ -28,6 +28,11 @@ If you landed here from a release link and have not read the tree:
 
 ### Changed
 
+- Bundled third-party StormByte dependencies now require the matching patch releases (Base 2.2.1, Buffer 2.0.4, Logger 2.0.4, System 2.1.1 where applicable) so a bundled build picks up the /arch:AVX change.
+
+
+### Changed
+
 - Windows Release optimizations use `/arch:AVX` instead of `/arch:AVX2`. The previous baseline required a Haswell-or-newer CPU (AVX2). `/arch:AVX` runs on Sandy Bridge and Ivy Bridge (including the i7-3770K) and later.
 
 [2.1.1]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.0...2.1.1

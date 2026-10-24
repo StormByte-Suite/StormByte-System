@@ -83,7 +83,7 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Dependency | Role |
 |------------|------|
-| [StormByte Base 2.2.0](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
+| [StormByte Base 2.2.1](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
 | [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0 | Downloads that Base archive and builds this module |
 
 ## The rest of the suite

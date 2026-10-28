@@ -48,7 +48,7 @@ cmake --build build -j
 cmake --install build
 ```
 
-Needs a C++26 compiler, CMake 3.28 or newer, [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0, and [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) 2.2.0. Configure downloads the matching Base release archive. There is no Base submodule. BuildMaster is the installed package when it is >= 2.1.0, otherwise the `buildmaster` submodule.
+Needs a C++26 compiler, CMake 3.28 or newer, [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.3, and [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.2) 2.2.2. Configure downloads the matching Base release archive. There is no Base submodule. BuildMaster is the installed package when it is >= 2.1.3, otherwise the `buildmaster` submodule.
 
 Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default ON). A plain configure builds the shared library. `-DBUILD_SHARED_LIBS=OFF` builds a static archive; on Windows the headers then do not use `dllimport`. The downloaded Base archive is the same mode.
 
@@ -83,8 +83,8 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Dependency | Role |
 |------------|------|
-| [StormByte Base 2.2.1](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
-| [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.0 | Downloads that Base archive and builds this module |
+| [StormByte Base 2.2.2](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.2) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
+| [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.3 | Downloads that Base archive and builds this module |
 
 ## The rest of the suite
 

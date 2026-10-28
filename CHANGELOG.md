@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Changed
+
+- Bundled builds use Base 2.2.2. Require BuildMaster 2.1.3 and pin its bundled submodule to the published release.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.1...HEAD
 
 ## [2.1.1] - 2026-10-24

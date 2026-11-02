@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 StormByte System is the C++26 process, device and host layer of the StormByte suite.
 
-It depends directly on [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.2) 2.2.2 and [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.3. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
+It depends directly on [StormByte Base](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.3) 2.2.3 and [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.3. This repository is not Base, Buffer, Config, Crypto, Database, Logger, Multimedia or Network.
 
 Spawn children with piped stdin/stdout/stderr, classify the medium behind a path, resolve directories and the current executable, inspect the machine, name the calling thread, and expand environment strings. POSIX and Windows stay behind one API. Failures are `StormByte::Error::Fault` in a per-type domain (`StormByte.System.*`). Nothing in this module throws. Text that crosses a DLL boundary is `StormByte::Safe::String` / `StormByte::Safe::WString`, not `std::string` by value.
 
@@ -22,7 +22,15 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
-[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.2...HEAD
+[Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.3...HEAD
+
+## [2.1.3] - 2026-11-02
+
+### Changed
+
+- Bundled builds use Base 2.2.3, including corrected exception contracts and allocation-failure cleanup for safe text operations.
+
+[2.1.3]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.2...2.1.3
 
 ## [2.1.2] - 2026-10-28
 

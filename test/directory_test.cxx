@@ -70,8 +70,9 @@ int test_current() {
 	Dump("current", ok, path);
 	ASSERT_TRUE(ok);
 	ASSERT_FALSE(static_cast<bool>(LastError()));
-	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::Directory::Error::Success), LastError().code());
-	ASSERT_EQUAL(StormByte::System::directory_category(), LastError().code().category());
+	const auto fault = LastError();
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::Directory::Error::Success), fault.code());
+	ASSERT_EQUAL(StormByte::System::directory_category(), fault.code().category());
 	ASSERT_NOT_EMPTY(path);
 	RETURN_TEST(0);
 }

@@ -100,7 +100,8 @@ int test_cpu_bitness() {
 	const unsigned bits = CPU().Bitness();
 	std::cout << "bitness=" << bits << '\n';
 	ASSERT_EQUAL(static_cast<unsigned>(sizeof(void*) * 8), bits);
-	ASSERT_EQUAL(before, LastError().code());
+	const auto after = LastError();
+	ASSERT_EQUAL(before, after.code());
 	RETURN_TEST(0);
 }
 
@@ -111,7 +112,8 @@ int test_cpu_lifecycle() {
 	CPU moved(std::move(copy));
 	copy = original;
 	moved = std::move(copy);
-	ASSERT_EQUAL(before, LastError().code());
+	const auto after = LastError();
+	ASSERT_EQUAL(before, after.code());
 	ASSERT_EQUAL(original.Bitness(), moved.Bitness());
 	RETURN_TEST(0);
 }
@@ -196,7 +198,8 @@ int test_motherboard_lifecycle() {
 	Motherboard moved(std::move(copy));
 	copy = original;
 	moved = std::move(copy);
-	ASSERT_EQUAL(before, LastError().code());
+	const auto after = LastError();
+	ASSERT_EQUAL(before, after.code());
 	RETURN_TEST(0);
 }
 
@@ -212,12 +215,14 @@ int test_motherboard_revision() {
 	const auto value = Motherboard().Revision();
 #ifdef MACOS
 	ASSERT_TRUE(value.empty());
-	ASSERT_EQUAL(make_error_code(StormByte::System::Host::Error::NotSupported), LastError().code());
+	const auto fault = LastError();
+	ASSERT_EQUAL(make_error_code(StormByte::System::Host::Error::NotSupported), fault.code());
 #endif
 	const int result = CheckOptionalText("board_revision", value);
 	const auto before = LastError().code();
 	CPU().Bitness();
-	ASSERT_EQUAL(before, LastError().code());
+	const auto after = LastError();
+	ASSERT_EQUAL(before, after.code());
 	CPU().Architecture();
 	ASSERT_FALSE(static_cast<bool>(LastError()));
 	RETURN_TEST(result);
@@ -234,7 +239,8 @@ int test_name() {
 		<< " fault=" << LastError().what() << '\n';
 	ASSERT_TRUE(ok);
 	ASSERT_FALSE(static_cast<bool>(LastError()));
-	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::Host::Error::Success), LastError().code());
+	const auto fault = LastError();
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::Host::Error::Success), fault.code());
 	ASSERT_NOT_EMPTY(name);
 	RETURN_TEST(0);
 }

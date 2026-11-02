@@ -72,8 +72,9 @@ int test_current_executable() {
 	Dump("current_executable", ok, path);
 	ASSERT_TRUE(ok);
 	ASSERT_FALSE(static_cast<bool>(LastError()));
-	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::File::Error::Success), LastError().code());
-	ASSERT_EQUAL(StormByte::System::file_category(), LastError().code().category());
+	const auto fault = LastError();
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::File::Error::Success), fault.code());
+	ASSERT_EQUAL(StormByte::System::file_category(), fault.code().category());
 	ASSERT_NOT_EMPTY(path);
 	ASSERT_TRUE(std::filesystem::is_regular_file(std::filesystem::path(std::string(path))));
 	RETURN_TEST(0);

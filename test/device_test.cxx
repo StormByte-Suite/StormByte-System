@@ -132,8 +132,9 @@ int test_not_found() {
 	const auto path = std::filesystem::current_path().root_path() / "StormByte-System-no-such-device-2.0.0";
 	Device device(path);
 	ASSERT_FALSE(static_cast<bool>(device));
-	ASSERT_EQUAL(StormByte::System::make_error_code(Device::Error::DeviceNotFound), device.Fault().code());
-	ASSERT_EQUAL(StormByte::System::device_category(), device.Fault().code().category());
+	const auto fault = device.Fault();
+	ASSERT_EQUAL(StormByte::System::make_error_code(Device::Error::DeviceNotFound), fault.code());
+	ASSERT_EQUAL(StormByte::System::device_category(), fault.code().category());
 	RETURN_TEST(0);
 }
 

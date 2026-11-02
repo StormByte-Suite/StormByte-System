@@ -98,7 +98,8 @@ int test_too_long() {
 		<< " fault=" << LastError().what() << '\n';
 #ifdef UNIX
 	ASSERT_FALSE(ok);
-	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::ThisThread::Error::TooLong), LastError().code());
+	const auto fault = LastError();
+	ASSERT_EQUAL(StormByte::System::make_error_code(StormByte::System::ThisThread::Error::TooLong), fault.code());
 #else
 	ASSERT_TRUE(ok || LastError().code() == StormByte::System::make_error_code(StormByte::System::ThisThread::Error::TooLong));
 #endif

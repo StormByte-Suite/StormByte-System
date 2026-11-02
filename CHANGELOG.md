@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Fixed
+
+- Error-code assertions in the device, directory, file, host and thread tests retain their `Fault` owner while comparing its code. Previously the assertion macros kept references into destroyed temporaries, causing stack-use-after-scope failures under AddressSanitizer.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.3...HEAD
 
 ## [2.1.3] - 2026-11-02

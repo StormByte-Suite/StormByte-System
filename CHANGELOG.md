@@ -32,6 +32,10 @@ If you landed here from a release link and have not read the tree:
 - Select the Base release archive by Linux architecture, libc and C++ standard library, matching the published `amd64`/`arm64` assets.
 - Build and test the eight Linux CI variants on native amd64/arm64 runners across glibc/musl and GCC/libstdc++ or Clang/libc++; use `cpu-baseline: auto` with PGO/LTO disabled in CI, and enable PGO/LTO in the matching release jobs.
 
+### Fixed
+
+- Accept an explicitly unavailable CPU model in the host tests when the operating system does not report one, as on some ARM64 virtual machines.
+
 [2.1.4]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.3...2.1.4
 
 ## [2.1.3] - 2026-11-02

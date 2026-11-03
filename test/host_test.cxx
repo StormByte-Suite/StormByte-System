@@ -42,6 +42,7 @@
 #include <StormByte/test_handlers.h>
 
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -132,9 +133,33 @@ int test_cpu_manufacturer() {
 
 int test_cpu_model() {
 	const String value = CPU().Model();
-	DumpText("cpu", value);
-	ASSERT_FALSE(static_cast<bool>(LastError()));
-	ASSERT_NOT_EMPTY(value);
+	const int result = CheckOptionalText("cpu", value);
+	if (result != 0)
+		return result;
+#ifdef LINUX
+	std::ifstream cpuinfo("/proc/cpuinfo");
+	std::string line;
+	while (std::getline(cpuinfo, line)) {
+		const auto colon = line.find(':');
+		if (colon == std::string::npos)
+			continue;
+		const auto key_start = line.find_first_not_of(" \t\r\n");
+		if (key_start == std::string::npos || key_start >= colon)
+			continue;
+		const auto key_end = line.find_last_not_of(" \t\r\n", colon - 1);
+		const auto key = line.substr(key_start, key_end - key_start + 1);
+		if (key != "model name" && key != "Processor")
+			continue;
+		const auto value_start = line.find_first_not_of(" \t\r\n", colon + 1);
+		if (value_start == std::string::npos)
+			continue;
+		const auto value_end = line.find_last_not_of(" \t\r\n");
+		const auto expected = line.substr(value_start, value_end - value_start + 1);
+		const auto actual = std::string(value);
+		ASSERT_EQUAL(expected, actual);
+		break;
+	}
+#endif
 	RETURN_TEST(0);
 }
 

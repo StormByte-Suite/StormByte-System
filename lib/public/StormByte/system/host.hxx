@@ -137,7 +137,7 @@ namespace StormByte::System {
 
 				/**
 				 * @brief Processor brand text.
-				 * @return Model name, or empty on failure.
+				 * @return Model name, or empty on failure; Unavailable when the OS supplies no name.
 				 */
 				StormByte::Safe::String Model() const;
 

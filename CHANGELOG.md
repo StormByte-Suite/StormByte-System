@@ -34,6 +34,7 @@ If you landed here from a release link and have not read the tree:
 
 ### Fixed
 
+- Stop injecting an x86-specific CPU baseline and overriding compiler optimization defaults in manual Release builds; CPU flags now come from the toolchain, while `ENABLE_LTO` remains independently configurable.
 - Accept an explicitly unavailable CPU model in the host tests when the operating system does not report one, as on some ARM64 virtual machines.
 
 [2.1.4]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.3...2.1.4

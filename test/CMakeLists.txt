@@ -2,6 +2,10 @@ option(ENABLE_TEST "Enable Unit Tests" OFF)
 if(ENABLE_TEST)
 	enable_testing()
 
+	add_test(NAME OptimizationTests
+		COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_SOURCE_DIR}/optimizations_test.cmake")
+	set_tests_properties(OptimizationTests PROPERTIES TIMEOUT 15)
+
 	add_executable(DeviceTests device_test.cxx)
 	target_link_libraries(DeviceTests StormByte::System)
 	add_test(NAME DeviceTests COMMAND DeviceTests)

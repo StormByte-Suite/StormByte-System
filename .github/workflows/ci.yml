@@ -19,15 +19,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ###########################################################################
-  # Bootstraps
-  # Submodule cache is OS-scoped by Actions — one warm job per OS.
-  ###########################################################################
   checkout-bootstrap:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-26.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     name: checkout-bootstrap (${{ matrix.os }})
     steps:
@@ -38,25 +34,36 @@ jobs:
           submodules: recursive
 
   apt-bootstrap:
-    runs-on: ubuntu-latest
-    name: apt-bootstrap
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, ubuntu-26.04-arm]
+    runs-on: ${{ matrix.runner }}
+    name: apt-bootstrap (${{ matrix.runner }})
     steps:
       - name: Warm APT lists cache
         uses: stormbytepp/githubactions/.github/actions/update-apt-cached@master
         with:
           cache-key: apt-lists
 
-  ###########################################################################
-  # Linux
-  ###########################################################################
   build-linux:
     needs: [checkout-bootstrap, apt-bootstrap]
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang, clang-libc++]
-    name: linux-${{ matrix.compiler }}
+        platform:
+          - runner: ubuntu-26.04
+            arch: amd64
+          - runner: ubuntu-26.04-arm
+            arch: arm64
+        libc: [glibc, musl]
+        toolchain:
+          - compiler: gcc
+            stdlib: libstdc++
+          - compiler: clang
+            stdlib: libc++
+    runs-on: ${{ matrix.platform.runner }}
+    name: linux-${{ matrix.platform.arch }}-${{ matrix.libc }}-${{ matrix.toolchain.stdlib }}
     steps:
       - name: Checkout repository and submodules
         uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
@@ -68,54 +75,40 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Append. Assigning the variable would drop a path already set.
-          add_dir() {
-            local name="$1" dir="$2"
-            local current="${!name-}"
-            case ":${current}:" in
-              *":${dir}:"*) return 0 ;;
-            esac
-            if [[ -n "$current" ]]; then
-              export "${name}=${current}:${dir}"
-            else
-              export "${name}=${dir}"
-            fi
-            echo "${name}=${!name}" >> "$GITHUB_ENV"
-          }
+          extra="${{ github.workspace }}/build/lib:${{ github.workspace }}/build/buildmaster/install/lib:${{ github.workspace }}/build/buildmaster/install/lib64"
           for name in LD_LIBRARY_PATH DYLD_LIBRARY_PATH; do
-            add_dir "$name" "${{ github.workspace }}/build/lib"
-            add_dir "$name" "${{ github.workspace }}/build/buildmaster/install/lib"
-            add_dir "$name" "${{ github.workspace }}/build/buildmaster/install/lib64"
+            current="$(printenv "$name" || :)"
+            if [[ -n "$current" ]]; then
+              printf '%s=%s:%s\n' "$name" "$current" "$extra" >> "$GITHUB_ENV"
+            else
+              printf '%s=%s\n' "$name" "$extra" >> "$GITHUB_ENV"
+            fi
           done
 
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
-          toolchain: ${{ matrix.compiler }}
-          ccache-key: v1-release-${{ matrix.compiler }}
-          buildmaster-datadir-cache-key: bm-datadir-${{ runner.os }}-${{ matrix.compiler }}
+          compiler: ${{ matrix.toolchain.compiler }}
+          cxx-stdlib: ${{ matrix.toolchain.stdlib }}
+          libc: ${{ matrix.libc }}
+          compiler-cache-key: system-v1
+          compiler-cache-scope: ${{ matrix.platform.arch }}-${{ matrix.libc }}-${{ matrix.toolchain.compiler }}-${{ matrix.toolchain.stdlib }}
+          buildmaster-cache-key: bm-system-${{ matrix.platform.arch }}-${{ matrix.libc }}-${{ matrix.toolchain.compiler }}-${{ matrix.toolchain.stdlib }}
           build-type: ${{ env.BUILD_TYPE }}
-          configure-options: >-
-            -DENABLE_LTO=ON
-            -DENABLE_PGO=OFF
+          pgo: false
+          lto: false
+          cpu-baseline: auto
+          cmake-options: >-
             -DENABLE_TEST=ON
             -DWITH_STORMBYTE=BUNDLED
             -DBUILD_SHARED_LIBS=ON
-            ${{ matrix.compiler == 'clang-libc++' && '-DCMAKE_CXX_FLAGS=-stdlib=libc++ -DCMAKE_CXX_STANDARD_LIBRARIES=-stdlib=libc++' || '' }}
-          run-tests: true
+          ctest: true
           ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
-  ###########################################################################
-  # macOS
-  ###########################################################################
   build-macos:
     needs: [checkout-bootstrap]
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler: [clang]
-    name: macos-${{ matrix.compiler }}
+    name: macos-arm64
     steps:
       - name: Checkout repository and submodules
         uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
@@ -127,50 +120,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Append. Assigning the variable would drop a path already set.
-          add_dir() {
-            local name="$1" dir="$2"
-            local current="${!name-}"
-            case ":${current}:" in
-              *":${dir}:"*) return 0 ;;
-            esac
-            if [[ -n "$current" ]]; then
-              export "${name}=${current}:${dir}"
-            else
-              export "${name}=${dir}"
-            fi
-            echo "${name}=${!name}" >> "$GITHUB_ENV"
-          }
+          extra="${{ github.workspace }}/build/lib:${{ github.workspace }}/build/buildmaster/install/lib:${{ github.workspace }}/build/buildmaster/install/lib64"
           for name in LD_LIBRARY_PATH DYLD_LIBRARY_PATH; do
-            add_dir "$name" "${{ github.workspace }}/build/lib"
-            add_dir "$name" "${{ github.workspace }}/build/buildmaster/install/lib"
-            add_dir "$name" "${{ github.workspace }}/build/buildmaster/install/lib64"
+            current="$(printenv "$name" || :)"
+            if [[ -n "$current" ]]; then
+              printf '%s=%s:%s\n' "$name" "$current" "$extra" >> "$GITHUB_ENV"
+            else
+              printf '%s=%s\n' "$name" "$extra" >> "$GITHUB_ENV"
+            fi
           done
 
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
-          toolchain: ${{ matrix.compiler }}
-          ccache-key: v1-release-${{ matrix.compiler }}
-          buildmaster-datadir-cache-key: bm-datadir-${{ runner.os }}-${{ matrix.compiler }}
+          compiler: clang
+          compiler-cache-key: system-v1
+          buildmaster-cache-key: bm-system-macos-clang
           build-type: ${{ env.BUILD_TYPE }}
-          configure-options: >-
-            -DENABLE_LTO=ON
-            -DENABLE_PGO=OFF
+          pgo: false
+          lto: false
+          cpu-baseline: auto
+          cmake-options: >-
             -DENABLE_TEST=ON
             -DWITH_STORMBYTE=BUNDLED
             -DBUILD_SHARED_LIBS=ON
-          run-tests: true
+          ctest: true
           ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test
 
-  ###########################################################################
-  # Windows
-  ###########################################################################
   build-windows:
     needs: [checkout-bootstrap]
     runs-on: windows-latest
-    name: windows-clang-cl
-
+    name: windows-x64
     steps:
       - name: Checkout repository and submodules
         uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
@@ -187,15 +167,16 @@ jobs:
       - name: Build with toolchain
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
-          toolchain: clang-cl
-          ccache-key: v1-release-clang-cl
-          buildmaster-datadir-cache-key: bm-datadir-${{ runner.os }}-clang-cl
+          compiler: clang-cl
+          compiler-cache-key: system-v1
+          buildmaster-cache-key: bm-system-windows-clang-cl
           build-type: ${{ env.BUILD_TYPE }}
-          configure-options: >-
-            -DENABLE_LTO=ON
-            -DENABLE_PGO=OFF
+          pgo: false
+          lto: false
+          cpu-baseline: auto
+          cmake-options: >-
             -DENABLE_TEST=ON
             -DWITH_STORMBYTE=BUNDLED
             -DBUILD_SHARED_LIBS=ON
-          run-tests: true
+          ctest: true
           ctest-options: --output-on-failure --test-dir ${{ github.workspace }}/build/test

@@ -44,7 +44,7 @@ Spawn children with piped stdin/stdout/stderr, classify the medium behind a path
 git clone --recursive https://github.com/StormByte-Suite/StormByte-System.git
 cd StormByte-System
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build -j"$(nproc)"
 cmake --install build
 ```
 
@@ -83,7 +83,7 @@ A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that
 
 | Dependency | Role |
 |------------|------|
-| [StormByte Base 2.2.3](https://github.com/StormByte-Suite/StormByte/releases/tag/2.2.3) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
+| [StormByte Base 3.0.0](https://github.com/StormByte-Suite/StormByte/releases/tag/3.0.0) | Error/Fault, visibility, `ByteSize`, safe text across the DLL boundary |
 | [StormByte-BuildMaster](https://github.com/StormByte-Suite/StormByte-BuildMaster) >= 2.1.4 | Downloads that Base archive and builds this module |
 
 ## The rest of the suite

@@ -26,6 +26,7 @@ If you landed here from a release link and have not read the tree:
 
 - Require StormByte Base 3.0.0 and BuildMaster 2.1.4 for bundled builds.
 - Select the Base release archive by Linux architecture, libc and C++ standard library, matching the published `amd64`/`arm64` assets.
+- Build and test the eight Linux CI variants on native amd64/arm64 runners across glibc/musl and GCC/libstdc++ or Clang/libc++; use `cpu-baseline: auto` with PGO/LTO disabled in CI, and enable PGO/LTO in the matching release jobs.
 
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.3...HEAD
 

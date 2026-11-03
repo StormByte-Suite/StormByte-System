@@ -26,6 +26,10 @@ If you landed here from a release link and have not read the tree:
 
 - Install `FindStormByteSystem.cmake` so Base 3.0.0 can discover System as a component. Verify a real consumer against the installed prefix and an extracted release ZIP.
 
+### Fixed
+
+- Reconfigure automatically when `VERSION` changes so rebuilt and installed artifacts use the updated project version.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.4...HEAD
 
 ## [2.1.4] - 2026-11-03

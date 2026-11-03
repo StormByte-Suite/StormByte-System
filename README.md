@@ -56,6 +56,15 @@ Shared vs static follows CMake `BUILD_SHARED_LIBS` (declared in `lib/`, default 
 
 A shared build keeps this library as its own `.so` / `.dll`. Under the LGPL that is usually the simpler way to ship: the user can replace that file. A static archive is folded into your binary. The LGPL still applies to this code; you must give the recipient a way to relink your product with a different build of this library. If that does not fit how you distribute the final product, a commercial license is available from the copyright holder (see [License](#license)).
 
+For installed Base and System prefixes, add Base's `share/cmake/Modules` to `CMAKE_MODULE_PATH` and both prefixes to `CMAKE_PREFIX_PATH`, then use the component finder:
+
+```cmake
+find_package(StormByte REQUIRED COMPONENTS Base System)
+target_link_libraries(app PRIVATE StormByte::System)
+```
+
+System installs `FindStormByteSystem.cmake` in `share/cmake/Modules`.
+
 ## Why StormByte-System
 
 | Goal | How it is achieved |

@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Added
+
+- Install `FindStormByteSystem.cmake` so Base 3.0.0 can discover System as a component. Verify a real consumer against the installed prefix and an extracted release ZIP.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.4...HEAD
 
 ## [2.1.4] - 2026-11-03

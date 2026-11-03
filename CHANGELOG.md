@@ -22,6 +22,10 @@ If you landed here from a release link and have not read the tree:
 
 ## [Unreleased]
 
+### Changed
+
+- Require StormByte Base 3.0.0 and BuildMaster 2.1.4 for bundled builds.
+
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/2.1.3...HEAD
 
 ## [2.1.3] - 2026-11-02

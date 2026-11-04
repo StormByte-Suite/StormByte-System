@@ -24,7 +24,7 @@ If you landed here from a release link and have not read the tree:
 
 [Unreleased]: https://github.com/StormByte-Suite/StormByte-System/compare/3.0.0...HEAD
 
-## [3.0.0] - 2026-11-03
+## [3.0.0] - 2026-11-04
 
 ### Added
 
@@ -40,6 +40,7 @@ If you landed here from a release link and have not read the tree:
 
 ### Fixed
 
+- PGO training runner now prepends its library directories to `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` with the `:` separator (previously `;`, which broke library lookup on musl) and no longer appends an empty entry when the variable is unset.
 - Reconfigure automatically when `VERSION` changes so rebuilt and installed artifacts use the updated project version.
 - Stop injecting an x86-specific CPU baseline and overriding compiler optimization defaults in manual Release builds; CPU flags now come from the toolchain, while `ENABLE_LTO` remains independently configurable.
 - Accept an explicitly unavailable CPU model in the host tests when the operating system does not report one, as on some ARM64 virtual machines.

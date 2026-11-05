@@ -40,6 +40,10 @@ Spawn children with piped stdin/stdout/stderr, classify the medium behind a path
 
 ## Installation
 
+`-DENABLE_TEST=ON` keeps normal tests available locally and during PGO training.
+Package discovery fixtures are CI-only and require `-DENABLE_CI_FIXTURES=ON`,
+which is disabled by default and enabled explicitly by CI.
+
 ```bash
 git clone --recursive https://github.com/StormByte-Suite/StormByte-System.git
 cd StormByte-System
